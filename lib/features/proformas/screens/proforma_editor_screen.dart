@@ -31,6 +31,7 @@ class ProformaEditorScreen extends ConsumerStatefulWidget {
 
 class _ProformaEditorScreenState extends ConsumerState<ProformaEditorScreen> {
   static const _debounce = Duration(milliseconds: 450);
+  static const _documentMountDelay = Duration(seconds: 2);
 
   final _clientController = TextEditingController();
   final _projectController = TextEditingController();
@@ -48,9 +49,15 @@ class _ProformaEditorScreenState extends ConsumerState<ProformaEditorScreen> {
   Timer? _debounceTimer;
   int _saveToken = 0;
 
+  /// La tabla no se monta al entrar: cabecera primero, luego loader y tabla.
+  bool _documentUiReady = false;
+  bool _documentMountScheduled = false;
+  Timer? _documentMountTimer;
+
   @override
   void dispose() {
     _debounceTimer?.cancel();
+    _documentMountTimer?.cancel();
     if (_dirty) {
       unawaited(_persist(immediate: true));
     }
@@ -71,6 +78,21 @@ class _ProformaEditorScreenState extends ConsumerState<ProformaEditorScreen> {
     _status = ProformaStatus.fromCode(proforma.status);
     _document = ProformaDocument.fromJsonString(proforma.documentJson);
     _hydrated = true;
+    _scheduleDocumentMount();
+  }
+
+  void _scheduleDocumentMount() {
+    if (_documentMountScheduled || _documentUiReady) return;
+    _documentMountScheduled = true;
+    // Espera a que el screen (cabecera) pinte, luego loader fijo y montaje.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _documentMountTimer?.cancel();
+      _documentMountTimer = Timer(_documentMountDelay, () {
+        if (!mounted) return;
+        setState(() => _documentUiReady = true);
+      });
+    });
   }
 
   void _scheduleSave() {
@@ -200,8 +222,10 @@ class _ProformaEditorScreenState extends ConsumerState<ProformaEditorScreen> {
           final logoPath = prefs?.companyLogoPath;
           final hasCompanyName = companyName != null && companyName.isNotEmpty;
 
+          final bottomInset = MediaQuery.paddingOf(context).bottom;
           return ListView(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 36),
+            // Base + inset del sistema (nav bar / gestos): varía por dispositivo.
+            padding: EdgeInsets.fromLTRB(20, 12, 20, 24 + bottomInset),
             children: [
               AcrylicSurface(
                 padding: const EdgeInsets.all(18),
@@ -302,14 +326,50 @@ class _ProformaEditorScreenState extends ConsumerState<ProformaEditorScreen> {
                 ),
               ),
               const SizedBox(height: 22),
-              ProformaTableBuilder(
-                document: _document,
-                defaultUnit: defaultUnit,
-                onChanged: _onDocumentChanged,
-              ),
+              if (_documentUiReady)
+                ProformaTableBuilder(
+                  document: _document,
+                  defaultUnit: defaultUnit,
+                  onChanged: _onDocumentChanged,
+                )
+              else
+                const _DocumentLoadingPanel(),
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _DocumentLoadingPanel extends StatelessWidget {
+  const _DocumentLoadingPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return AcrylicSurface(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 36),
+      child: Column(
+        children: [
+          SizedBox(
+            width: 28,
+            height: 28,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.5,
+              color: colorScheme.primary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Cargando documento…',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onSurface.withValues(alpha: 0.7),
+            ),
+          ),
+        ],
       ),
     );
   }

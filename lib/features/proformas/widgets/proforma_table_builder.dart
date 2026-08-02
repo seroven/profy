@@ -372,7 +372,6 @@ class _SectionBlock extends StatelessWidget {
     final actions = _actions();
 
     return _CollapseHost(
-      storageKey: 'sec_${section.id}',
       initiallyExpanded: false,
       headerBuilder: (context, expanded, toggle) {
         return _BlockHeader(
@@ -580,7 +579,6 @@ class _SubsectionBlock extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(left: _indentStep),
       child: _CollapseHost(
-        storageKey: 'sub_${subsection.id}',
         initiallyExpanded: false,
         headerBuilder: (context, expanded, toggle) {
           return _BlockHeader(
@@ -1016,13 +1014,11 @@ class _BlockHeader extends StatelessWidget {
 
 class _CollapseHost extends StatefulWidget {
   const _CollapseHost({
-    required this.storageKey,
     required this.initiallyExpanded,
     required this.headerBuilder,
     required this.body,
   });
 
-  final String storageKey;
   final bool initiallyExpanded;
   final Widget Function(
     BuildContext context,
@@ -1036,22 +1032,9 @@ class _CollapseHost extends StatefulWidget {
 }
 
 class _CollapseHostState extends State<_CollapseHost> {
-  static final Map<String, bool> _expandedByKey = {};
+  late bool _expanded = widget.initiallyExpanded;
 
-  late bool _expanded;
-
-  @override
-  void initState() {
-    super.initState();
-    _expanded = _expandedByKey[widget.storageKey] ?? widget.initiallyExpanded;
-  }
-
-  void _toggle() {
-    setState(() {
-      _expanded = !_expanded;
-      _expandedByKey[widget.storageKey] = _expanded;
-    });
-  }
+  void _toggle() => setState(() => _expanded = !_expanded);
 
   @override
   Widget build(BuildContext context) {
@@ -1059,14 +1042,7 @@ class _CollapseHostState extends State<_CollapseHost> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         widget.headerBuilder(context, _expanded, _toggle),
-        AnimatedSize(
-          duration: AppMotion.fast,
-          curve: AppMotion.standard,
-          alignment: Alignment.topCenter,
-          child: _expanded
-              ? widget.body
-              : const SizedBox(width: double.infinity),
-        ),
+        if (_expanded) widget.body,
       ],
     );
   }
