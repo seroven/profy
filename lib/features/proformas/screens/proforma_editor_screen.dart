@@ -225,6 +225,30 @@ class _ProformaEditorScreenState extends ConsumerState<ProformaEditorScreen> {
     }
   }
 
+  Future<void> _exportPdf() async {
+    if (!_hydrated || _actionBusy || _status != ProformaStatus.finished) {
+      return;
+    }
+
+    setState(() => _actionBusy = true);
+    try {
+      final proforma = await ref
+          .read(proformaServiceProvider)
+          .getById(widget.proformaId);
+      if (proforma == null) {
+        throw StateError('Proforma no encontrada');
+      }
+      await ref.read(proformaPdfServiceProvider).preview(proforma);
+    } catch (error, stackTrace) {
+      debugPrint('PDF export failed: $error\n$stackTrace');
+      if (mounted) {
+        AppToast.error(context, 'No se pudo generar el PDF');
+      }
+    } finally {
+      if (mounted) setState(() => _actionBusy = false);
+    }
+  }
+
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -444,17 +468,23 @@ class _ProformaEditorScreenState extends ConsumerState<ProformaEditorScreen> {
                 ),
               ] else ...[
                 Text(
-                  'Esta proforma está terminada. Puedes reabrirla si necesitas editarla.',
+                  'Esta proforma está terminada. Exporta el PDF o reabre como borrador para editar.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: colorScheme.onSurface.withValues(alpha: 0.65),
                   ),
                 ),
                 const SizedBox(height: 12),
                 AppButton(
-                  label: 'Reabrir como borrador',
-                  icon: Icons.lock_open_rounded,
+                  label: 'Exportar PDF',
+                  icon: Icons.picture_as_pdf_outlined,
                   isLoading: _actionBusy,
+                  onPressed: _actionBusy ? null : _exportPdf,
+                ),
+                const SizedBox(height: 10),
+                OutlinedButton.icon(
                   onPressed: _actionBusy ? null : _reopenAsDraft,
+                  icon: const Icon(Icons.lock_open_rounded),
+                  label: const Text('Reabrir como borrador'),
                 ),
               ],
             ],
