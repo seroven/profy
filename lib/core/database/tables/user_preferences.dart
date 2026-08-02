@@ -22,6 +22,8 @@ class UserPreferences extends Table with Auditable {
   TextColumn get defaultUnit =>
       text().named('default_unit').withDefault(const Constant('m2'))();
 
+  TextColumn get companyName => text().named('company_name').nullable()();
+
   TextColumn get companyLogoPath =>
       text().named('company_logo_path').nullable()();
 }

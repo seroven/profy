@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../shared/widgets/acrylic_surface.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/app_text_field.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../providers/settings_providers.dart';
 import '../widgets/settings_subpage_scaffold.dart';
@@ -22,8 +23,9 @@ class EditCompanyLogoScreen extends ConsumerStatefulWidget {
 
 class _EditCompanyLogoScreenState
     extends ConsumerState<EditCompanyLogoScreen> {
+  final _nameController = TextEditingController();
   bool _saving = false;
-  /// Vista local inmediata; el path fijo cacheaba la imagen anterior.
+  bool _hydrated = false;
   String? _previewPath;
   bool _previewCleared = false;
 
@@ -31,6 +33,40 @@ class _EditCompanyLogoScreenState
     if (_previewCleared) return null;
     return _previewPath ??
         ref.watch(userPreferencesProvider).valueOrNull?.companyLogoPath;
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  void _hydrate() {
+    final prefs = ref.read(userPreferencesProvider).valueOrNull;
+    if (prefs == null || _hydrated) return;
+    _nameController.text = prefs.companyName ?? '';
+    _hydrated = true;
+  }
+
+  Future<void> _saveName() async {
+    final userId = ref.read(currentUserIdProvider);
+    if (userId == null) return;
+
+    setState(() => _saving = true);
+    try {
+      await ref.read(userPreferencesServiceProvider).updateCompanyProfile(
+            userId: userId,
+            companyName: _nameController.text,
+          );
+      ref.invalidate(userPreferencesProvider);
+      if (mounted) AppToast.success(context, 'Nombre de empresa guardado');
+    } catch (_) {
+      if (mounted) {
+        AppToast.error(context, 'No se pudo guardar el nombre');
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   Future<void> _pickLogo() async {
@@ -112,13 +148,39 @@ class _EditCompanyLogoScreenState
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(userPreferencesProvider, (previous, next) {
+      if (_hydrated) return;
+      _hydrate();
+      setState(() {});
+    });
+    _hydrate();
+
     final logoPath = _logoPath;
+    final theme = Theme.of(context);
 
     return SettingsSubpageScaffold(
-      title: 'Logo de empresa',
+      title: 'Empresa',
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
         children: [
+          Text('Identidad', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 10),
+          AppTextField(
+            controller: _nameController,
+            label: 'Nombre de la empresa',
+            hint: 'Se mostrará en tus proformas',
+            textInputAction: TextInputAction.done,
+            enabled: !_saving,
+          ),
+          const SizedBox(height: 14),
+          AppButton(
+            label: 'Guardar nombre',
+            isLoading: _saving,
+            onPressed: _saving ? null : _saveName,
+          ),
+          const SizedBox(height: 28),
+          Text('Logo', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 10),
           AcrylicSurface(
             padding: const EdgeInsets.all(20),
             child: AspectRatio(
@@ -127,7 +189,7 @@ class _EditCompanyLogoScreenState
                   ? Center(
                       child: Text(
                         'Sin logo',
-                        style: Theme.of(context).textTheme.titleMedium,
+                        style: theme.textTheme.titleMedium,
                       ),
                     )
                   : ClipRRect(

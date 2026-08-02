@@ -1435,6 +1435,17 @@ class $UserPreferencesTable extends UserPreferences
     requiredDuringInsert: false,
     defaultValue: const Constant('m2'),
   );
+  static const VerificationMeta _companyNameMeta = const VerificationMeta(
+    'companyName',
+  );
+  @override
+  late final GeneratedColumn<String> companyName = GeneratedColumn<String>(
+    'company_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _companyLogoPathMeta = const VerificationMeta(
     'companyLogoPath',
   );
@@ -1459,6 +1470,7 @@ class $UserPreferencesTable extends UserPreferences
     colorTheme,
     defaultCurrency,
     defaultUnit,
+    companyName,
     companyLogoPath,
   ];
   @override
@@ -1547,6 +1559,15 @@ class $UserPreferencesTable extends UserPreferences
         ),
       );
     }
+    if (data.containsKey('company_name')) {
+      context.handle(
+        _companyNameMeta,
+        companyName.isAcceptableOrUnknown(
+          data['company_name']!,
+          _companyNameMeta,
+        ),
+      );
+    }
     if (data.containsKey('company_logo_path')) {
       context.handle(
         _companyLogoPathMeta,
@@ -1609,6 +1630,10 @@ class $UserPreferencesTable extends UserPreferences
         DriftSqlType.string,
         data['${effectivePrefix}default_unit'],
       )!,
+      companyName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}company_name'],
+      ),
       companyLogoPath: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}company_logo_path'],
@@ -1640,6 +1665,7 @@ class UserPreference extends DataClass implements Insertable<UserPreference> {
 
   /// `m2` | `m3` | `ft` | `cm`
   final String defaultUnit;
+  final String? companyName;
   final String? companyLogoPath;
   const UserPreference({
     required this.id,
@@ -1653,6 +1679,7 @@ class UserPreference extends DataClass implements Insertable<UserPreference> {
     required this.colorTheme,
     required this.defaultCurrency,
     required this.defaultUnit,
+    this.companyName,
     this.companyLogoPath,
   });
   @override
@@ -1673,6 +1700,9 @@ class UserPreference extends DataClass implements Insertable<UserPreference> {
     map['color_theme'] = Variable<String>(colorTheme);
     map['default_currency'] = Variable<String>(defaultCurrency);
     map['default_unit'] = Variable<String>(defaultUnit);
+    if (!nullToAbsent || companyName != null) {
+      map['company_name'] = Variable<String>(companyName);
+    }
     if (!nullToAbsent || companyLogoPath != null) {
       map['company_logo_path'] = Variable<String>(companyLogoPath);
     }
@@ -1696,6 +1726,9 @@ class UserPreference extends DataClass implements Insertable<UserPreference> {
       colorTheme: Value(colorTheme),
       defaultCurrency: Value(defaultCurrency),
       defaultUnit: Value(defaultUnit),
+      companyName: companyName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(companyName),
       companyLogoPath: companyLogoPath == null && nullToAbsent
           ? const Value.absent()
           : Value(companyLogoPath),
@@ -1719,6 +1752,7 @@ class UserPreference extends DataClass implements Insertable<UserPreference> {
       colorTheme: serializer.fromJson<String>(json['colorTheme']),
       defaultCurrency: serializer.fromJson<String>(json['defaultCurrency']),
       defaultUnit: serializer.fromJson<String>(json['defaultUnit']),
+      companyName: serializer.fromJson<String?>(json['companyName']),
       companyLogoPath: serializer.fromJson<String?>(json['companyLogoPath']),
     );
   }
@@ -1737,6 +1771,7 @@ class UserPreference extends DataClass implements Insertable<UserPreference> {
       'colorTheme': serializer.toJson<String>(colorTheme),
       'defaultCurrency': serializer.toJson<String>(defaultCurrency),
       'defaultUnit': serializer.toJson<String>(defaultUnit),
+      'companyName': serializer.toJson<String?>(companyName),
       'companyLogoPath': serializer.toJson<String?>(companyLogoPath),
     };
   }
@@ -1753,6 +1788,7 @@ class UserPreference extends DataClass implements Insertable<UserPreference> {
     String? colorTheme,
     String? defaultCurrency,
     String? defaultUnit,
+    Value<String?> companyName = const Value.absent(),
     Value<String?> companyLogoPath = const Value.absent(),
   }) => UserPreference(
     id: id ?? this.id,
@@ -1766,6 +1802,7 @@ class UserPreference extends DataClass implements Insertable<UserPreference> {
     colorTheme: colorTheme ?? this.colorTheme,
     defaultCurrency: defaultCurrency ?? this.defaultCurrency,
     defaultUnit: defaultUnit ?? this.defaultUnit,
+    companyName: companyName.present ? companyName.value : this.companyName,
     companyLogoPath: companyLogoPath.present
         ? companyLogoPath.value
         : this.companyLogoPath,
@@ -1795,6 +1832,9 @@ class UserPreference extends DataClass implements Insertable<UserPreference> {
       defaultUnit: data.defaultUnit.present
           ? data.defaultUnit.value
           : this.defaultUnit,
+      companyName: data.companyName.present
+          ? data.companyName.value
+          : this.companyName,
       companyLogoPath: data.companyLogoPath.present
           ? data.companyLogoPath.value
           : this.companyLogoPath,
@@ -1815,6 +1855,7 @@ class UserPreference extends DataClass implements Insertable<UserPreference> {
           ..write('colorTheme: $colorTheme, ')
           ..write('defaultCurrency: $defaultCurrency, ')
           ..write('defaultUnit: $defaultUnit, ')
+          ..write('companyName: $companyName, ')
           ..write('companyLogoPath: $companyLogoPath')
           ..write(')'))
         .toString();
@@ -1833,6 +1874,7 @@ class UserPreference extends DataClass implements Insertable<UserPreference> {
     colorTheme,
     defaultCurrency,
     defaultUnit,
+    companyName,
     companyLogoPath,
   );
   @override
@@ -1850,6 +1892,7 @@ class UserPreference extends DataClass implements Insertable<UserPreference> {
           other.colorTheme == this.colorTheme &&
           other.defaultCurrency == this.defaultCurrency &&
           other.defaultUnit == this.defaultUnit &&
+          other.companyName == this.companyName &&
           other.companyLogoPath == this.companyLogoPath);
 }
 
@@ -1865,6 +1908,7 @@ class UserPreferencesCompanion extends UpdateCompanion<UserPreference> {
   final Value<String> colorTheme;
   final Value<String> defaultCurrency;
   final Value<String> defaultUnit;
+  final Value<String?> companyName;
   final Value<String?> companyLogoPath;
   const UserPreferencesCompanion({
     this.id = const Value.absent(),
@@ -1878,6 +1922,7 @@ class UserPreferencesCompanion extends UpdateCompanion<UserPreference> {
     this.colorTheme = const Value.absent(),
     this.defaultCurrency = const Value.absent(),
     this.defaultUnit = const Value.absent(),
+    this.companyName = const Value.absent(),
     this.companyLogoPath = const Value.absent(),
   });
   UserPreferencesCompanion.insert({
@@ -1892,6 +1937,7 @@ class UserPreferencesCompanion extends UpdateCompanion<UserPreference> {
     this.colorTheme = const Value.absent(),
     this.defaultCurrency = const Value.absent(),
     this.defaultUnit = const Value.absent(),
+    this.companyName = const Value.absent(),
     this.companyLogoPath = const Value.absent(),
   }) : userDetailId = Value(userDetailId);
   static Insertable<UserPreference> custom({
@@ -1906,6 +1952,7 @@ class UserPreferencesCompanion extends UpdateCompanion<UserPreference> {
     Expression<String>? colorTheme,
     Expression<String>? defaultCurrency,
     Expression<String>? defaultUnit,
+    Expression<String>? companyName,
     Expression<String>? companyLogoPath,
   }) {
     return RawValuesInsertable({
@@ -1920,6 +1967,7 @@ class UserPreferencesCompanion extends UpdateCompanion<UserPreference> {
       if (colorTheme != null) 'color_theme': colorTheme,
       if (defaultCurrency != null) 'default_currency': defaultCurrency,
       if (defaultUnit != null) 'default_unit': defaultUnit,
+      if (companyName != null) 'company_name': companyName,
       if (companyLogoPath != null) 'company_logo_path': companyLogoPath,
     });
   }
@@ -1936,6 +1984,7 @@ class UserPreferencesCompanion extends UpdateCompanion<UserPreference> {
     Value<String>? colorTheme,
     Value<String>? defaultCurrency,
     Value<String>? defaultUnit,
+    Value<String?>? companyName,
     Value<String?>? companyLogoPath,
   }) {
     return UserPreferencesCompanion(
@@ -1950,6 +1999,7 @@ class UserPreferencesCompanion extends UpdateCompanion<UserPreference> {
       colorTheme: colorTheme ?? this.colorTheme,
       defaultCurrency: defaultCurrency ?? this.defaultCurrency,
       defaultUnit: defaultUnit ?? this.defaultUnit,
+      companyName: companyName ?? this.companyName,
       companyLogoPath: companyLogoPath ?? this.companyLogoPath,
     );
   }
@@ -1990,6 +2040,9 @@ class UserPreferencesCompanion extends UpdateCompanion<UserPreference> {
     if (defaultUnit.present) {
       map['default_unit'] = Variable<String>(defaultUnit.value);
     }
+    if (companyName.present) {
+      map['company_name'] = Variable<String>(companyName.value);
+    }
     if (companyLogoPath.present) {
       map['company_logo_path'] = Variable<String>(companyLogoPath.value);
     }
@@ -2010,6 +2063,7 @@ class UserPreferencesCompanion extends UpdateCompanion<UserPreference> {
           ..write('colorTheme: $colorTheme, ')
           ..write('defaultCurrency: $defaultCurrency, ')
           ..write('defaultUnit: $defaultUnit, ')
+          ..write('companyName: $companyName, ')
           ..write('companyLogoPath: $companyLogoPath')
           ..write(')'))
         .toString();
@@ -2778,6 +2832,857 @@ class PaymentMethodsCompanion extends UpdateCompanion<PaymentMethod> {
   }
 }
 
+class $ProformasTable extends Proformas
+    with TableInfo<$ProformasTable, Proforma> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ProformasTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _enableMeta = const VerificationMeta('enable');
+  @override
+  late final GeneratedColumn<bool> enable = GeneratedColumn<bool>(
+    'enable',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("enable" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _updatedAtMeta = const VerificationMeta(
+    'updatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+    'updated_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  static const VerificationMeta _userCreateMeta = const VerificationMeta(
+    'userCreate',
+  );
+  @override
+  late final GeneratedColumn<String> userCreate = GeneratedColumn<String>(
+    'user_create',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _userUpdateMeta = const VerificationMeta(
+    'userUpdate',
+  );
+  @override
+  late final GeneratedColumn<String> userUpdate = GeneratedColumn<String>(
+    'user_update',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _userIdMeta = const VerificationMeta('userId');
+  @override
+  late final GeneratedColumn<int> userId = GeneratedColumn<int>(
+    'user_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'REFERENCES users (id)',
+    ),
+  );
+  static const VerificationMeta _codeMeta = const VerificationMeta('code');
+  @override
+  late final GeneratedColumn<String> code = GeneratedColumn<String>(
+    'code',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _clientNameMeta = const VerificationMeta(
+    'clientName',
+  );
+  @override
+  late final GeneratedColumn<String> clientName = GeneratedColumn<String>(
+    'client_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _projectNameMeta = const VerificationMeta(
+    'projectName',
+  );
+  @override
+  late final GeneratedColumn<String> projectName = GeneratedColumn<String>(
+    'project_name',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(''),
+  );
+  static const VerificationMeta _phoneMeta = const VerificationMeta('phone');
+  @override
+  late final GeneratedColumn<String> phone = GeneratedColumn<String>(
+    'phone',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _proformaDateMeta = const VerificationMeta(
+    'proformaDate',
+  );
+  @override
+  late final GeneratedColumn<DateTime> proformaDate = GeneratedColumn<DateTime>(
+    'proforma_date',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _currencyMeta = const VerificationMeta(
+    'currency',
+  );
+  @override
+  late final GeneratedColumn<String> currency = GeneratedColumn<String>(
+    'currency',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('PEN'),
+  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('draft'),
+  );
+  static const VerificationMeta _documentJsonMeta = const VerificationMeta(
+    'documentJson',
+  );
+  @override
+  late final GeneratedColumn<String> documentJson = GeneratedColumn<String>(
+    'document_json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('{"blocks":[]}'),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    enable,
+    createdAt,
+    updatedAt,
+    userCreate,
+    userUpdate,
+    userId,
+    code,
+    clientName,
+    projectName,
+    phone,
+    proformaDate,
+    currency,
+    status,
+    documentJson,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'proformas';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<Proforma> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('enable')) {
+      context.handle(
+        _enableMeta,
+        enable.isAcceptableOrUnknown(data['enable']!, _enableMeta),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(
+        _updatedAtMeta,
+        updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta),
+      );
+    }
+    if (data.containsKey('user_create')) {
+      context.handle(
+        _userCreateMeta,
+        userCreate.isAcceptableOrUnknown(data['user_create']!, _userCreateMeta),
+      );
+    }
+    if (data.containsKey('user_update')) {
+      context.handle(
+        _userUpdateMeta,
+        userUpdate.isAcceptableOrUnknown(data['user_update']!, _userUpdateMeta),
+      );
+    }
+    if (data.containsKey('user_id')) {
+      context.handle(
+        _userIdMeta,
+        userId.isAcceptableOrUnknown(data['user_id']!, _userIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_userIdMeta);
+    }
+    if (data.containsKey('code')) {
+      context.handle(
+        _codeMeta,
+        code.isAcceptableOrUnknown(data['code']!, _codeMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_codeMeta);
+    }
+    if (data.containsKey('client_name')) {
+      context.handle(
+        _clientNameMeta,
+        clientName.isAcceptableOrUnknown(data['client_name']!, _clientNameMeta),
+      );
+    }
+    if (data.containsKey('project_name')) {
+      context.handle(
+        _projectNameMeta,
+        projectName.isAcceptableOrUnknown(
+          data['project_name']!,
+          _projectNameMeta,
+        ),
+      );
+    }
+    if (data.containsKey('phone')) {
+      context.handle(
+        _phoneMeta,
+        phone.isAcceptableOrUnknown(data['phone']!, _phoneMeta),
+      );
+    }
+    if (data.containsKey('proforma_date')) {
+      context.handle(
+        _proformaDateMeta,
+        proformaDate.isAcceptableOrUnknown(
+          data['proforma_date']!,
+          _proformaDateMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_proformaDateMeta);
+    }
+    if (data.containsKey('currency')) {
+      context.handle(
+        _currencyMeta,
+        currency.isAcceptableOrUnknown(data['currency']!, _currencyMeta),
+      );
+    }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    }
+    if (data.containsKey('document_json')) {
+      context.handle(
+        _documentJsonMeta,
+        documentJson.isAcceptableOrUnknown(
+          data['document_json']!,
+          _documentJsonMeta,
+        ),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Proforma map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Proforma(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      enable: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}enable'],
+      )!,
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+      updatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}updated_at'],
+      )!,
+      userCreate: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user_create'],
+      ),
+      userUpdate: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}user_update'],
+      ),
+      userId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}user_id'],
+      )!,
+      code: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}code'],
+      )!,
+      clientName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}client_name'],
+      )!,
+      projectName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}project_name'],
+      )!,
+      phone: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}phone'],
+      ),
+      proformaDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}proforma_date'],
+      )!,
+      currency: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}currency'],
+      )!,
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
+      )!,
+      documentJson: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}document_json'],
+      )!,
+    );
+  }
+
+  @override
+  $ProformasTable createAlias(String alias) {
+    return $ProformasTable(attachedDatabase, alias);
+  }
+}
+
+class Proforma extends DataClass implements Insertable<Proforma> {
+  final int id;
+  final bool enable;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final String? userCreate;
+  final String? userUpdate;
+  final int userId;
+
+  /// Ej: PR-2026-928321
+  final String code;
+  final String clientName;
+  final String projectName;
+  final String? phone;
+  final DateTime proformaDate;
+
+  /// `PEN` | `USD` | `EUR`
+  final String currency;
+
+  /// `draft` | `finished`
+  final String status;
+
+  /// Bloques del documento (tablas, texto, perfil, medios de pago, …).
+  final String documentJson;
+  const Proforma({
+    required this.id,
+    required this.enable,
+    required this.createdAt,
+    required this.updatedAt,
+    this.userCreate,
+    this.userUpdate,
+    required this.userId,
+    required this.code,
+    required this.clientName,
+    required this.projectName,
+    this.phone,
+    required this.proformaDate,
+    required this.currency,
+    required this.status,
+    required this.documentJson,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['enable'] = Variable<bool>(enable);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    if (!nullToAbsent || userCreate != null) {
+      map['user_create'] = Variable<String>(userCreate);
+    }
+    if (!nullToAbsent || userUpdate != null) {
+      map['user_update'] = Variable<String>(userUpdate);
+    }
+    map['user_id'] = Variable<int>(userId);
+    map['code'] = Variable<String>(code);
+    map['client_name'] = Variable<String>(clientName);
+    map['project_name'] = Variable<String>(projectName);
+    if (!nullToAbsent || phone != null) {
+      map['phone'] = Variable<String>(phone);
+    }
+    map['proforma_date'] = Variable<DateTime>(proformaDate);
+    map['currency'] = Variable<String>(currency);
+    map['status'] = Variable<String>(status);
+    map['document_json'] = Variable<String>(documentJson);
+    return map;
+  }
+
+  ProformasCompanion toCompanion(bool nullToAbsent) {
+    return ProformasCompanion(
+      id: Value(id),
+      enable: Value(enable),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+      userCreate: userCreate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(userCreate),
+      userUpdate: userUpdate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(userUpdate),
+      userId: Value(userId),
+      code: Value(code),
+      clientName: Value(clientName),
+      projectName: Value(projectName),
+      phone: phone == null && nullToAbsent
+          ? const Value.absent()
+          : Value(phone),
+      proformaDate: Value(proformaDate),
+      currency: Value(currency),
+      status: Value(status),
+      documentJson: Value(documentJson),
+    );
+  }
+
+  factory Proforma.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Proforma(
+      id: serializer.fromJson<int>(json['id']),
+      enable: serializer.fromJson<bool>(json['enable']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+      userCreate: serializer.fromJson<String?>(json['userCreate']),
+      userUpdate: serializer.fromJson<String?>(json['userUpdate']),
+      userId: serializer.fromJson<int>(json['userId']),
+      code: serializer.fromJson<String>(json['code']),
+      clientName: serializer.fromJson<String>(json['clientName']),
+      projectName: serializer.fromJson<String>(json['projectName']),
+      phone: serializer.fromJson<String?>(json['phone']),
+      proformaDate: serializer.fromJson<DateTime>(json['proformaDate']),
+      currency: serializer.fromJson<String>(json['currency']),
+      status: serializer.fromJson<String>(json['status']),
+      documentJson: serializer.fromJson<String>(json['documentJson']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'enable': serializer.toJson<bool>(enable),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+      'userCreate': serializer.toJson<String?>(userCreate),
+      'userUpdate': serializer.toJson<String?>(userUpdate),
+      'userId': serializer.toJson<int>(userId),
+      'code': serializer.toJson<String>(code),
+      'clientName': serializer.toJson<String>(clientName),
+      'projectName': serializer.toJson<String>(projectName),
+      'phone': serializer.toJson<String?>(phone),
+      'proformaDate': serializer.toJson<DateTime>(proformaDate),
+      'currency': serializer.toJson<String>(currency),
+      'status': serializer.toJson<String>(status),
+      'documentJson': serializer.toJson<String>(documentJson),
+    };
+  }
+
+  Proforma copyWith({
+    int? id,
+    bool? enable,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Value<String?> userCreate = const Value.absent(),
+    Value<String?> userUpdate = const Value.absent(),
+    int? userId,
+    String? code,
+    String? clientName,
+    String? projectName,
+    Value<String?> phone = const Value.absent(),
+    DateTime? proformaDate,
+    String? currency,
+    String? status,
+    String? documentJson,
+  }) => Proforma(
+    id: id ?? this.id,
+    enable: enable ?? this.enable,
+    createdAt: createdAt ?? this.createdAt,
+    updatedAt: updatedAt ?? this.updatedAt,
+    userCreate: userCreate.present ? userCreate.value : this.userCreate,
+    userUpdate: userUpdate.present ? userUpdate.value : this.userUpdate,
+    userId: userId ?? this.userId,
+    code: code ?? this.code,
+    clientName: clientName ?? this.clientName,
+    projectName: projectName ?? this.projectName,
+    phone: phone.present ? phone.value : this.phone,
+    proformaDate: proformaDate ?? this.proformaDate,
+    currency: currency ?? this.currency,
+    status: status ?? this.status,
+    documentJson: documentJson ?? this.documentJson,
+  );
+  Proforma copyWithCompanion(ProformasCompanion data) {
+    return Proforma(
+      id: data.id.present ? data.id.value : this.id,
+      enable: data.enable.present ? data.enable.value : this.enable,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+      userCreate: data.userCreate.present
+          ? data.userCreate.value
+          : this.userCreate,
+      userUpdate: data.userUpdate.present
+          ? data.userUpdate.value
+          : this.userUpdate,
+      userId: data.userId.present ? data.userId.value : this.userId,
+      code: data.code.present ? data.code.value : this.code,
+      clientName: data.clientName.present
+          ? data.clientName.value
+          : this.clientName,
+      projectName: data.projectName.present
+          ? data.projectName.value
+          : this.projectName,
+      phone: data.phone.present ? data.phone.value : this.phone,
+      proformaDate: data.proformaDate.present
+          ? data.proformaDate.value
+          : this.proformaDate,
+      currency: data.currency.present ? data.currency.value : this.currency,
+      status: data.status.present ? data.status.value : this.status,
+      documentJson: data.documentJson.present
+          ? data.documentJson.value
+          : this.documentJson,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Proforma(')
+          ..write('id: $id, ')
+          ..write('enable: $enable, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('userCreate: $userCreate, ')
+          ..write('userUpdate: $userUpdate, ')
+          ..write('userId: $userId, ')
+          ..write('code: $code, ')
+          ..write('clientName: $clientName, ')
+          ..write('projectName: $projectName, ')
+          ..write('phone: $phone, ')
+          ..write('proformaDate: $proformaDate, ')
+          ..write('currency: $currency, ')
+          ..write('status: $status, ')
+          ..write('documentJson: $documentJson')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    enable,
+    createdAt,
+    updatedAt,
+    userCreate,
+    userUpdate,
+    userId,
+    code,
+    clientName,
+    projectName,
+    phone,
+    proformaDate,
+    currency,
+    status,
+    documentJson,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Proforma &&
+          other.id == this.id &&
+          other.enable == this.enable &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt &&
+          other.userCreate == this.userCreate &&
+          other.userUpdate == this.userUpdate &&
+          other.userId == this.userId &&
+          other.code == this.code &&
+          other.clientName == this.clientName &&
+          other.projectName == this.projectName &&
+          other.phone == this.phone &&
+          other.proformaDate == this.proformaDate &&
+          other.currency == this.currency &&
+          other.status == this.status &&
+          other.documentJson == this.documentJson);
+}
+
+class ProformasCompanion extends UpdateCompanion<Proforma> {
+  final Value<int> id;
+  final Value<bool> enable;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  final Value<String?> userCreate;
+  final Value<String?> userUpdate;
+  final Value<int> userId;
+  final Value<String> code;
+  final Value<String> clientName;
+  final Value<String> projectName;
+  final Value<String?> phone;
+  final Value<DateTime> proformaDate;
+  final Value<String> currency;
+  final Value<String> status;
+  final Value<String> documentJson;
+  const ProformasCompanion({
+    this.id = const Value.absent(),
+    this.enable = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.userCreate = const Value.absent(),
+    this.userUpdate = const Value.absent(),
+    this.userId = const Value.absent(),
+    this.code = const Value.absent(),
+    this.clientName = const Value.absent(),
+    this.projectName = const Value.absent(),
+    this.phone = const Value.absent(),
+    this.proformaDate = const Value.absent(),
+    this.currency = const Value.absent(),
+    this.status = const Value.absent(),
+    this.documentJson = const Value.absent(),
+  });
+  ProformasCompanion.insert({
+    this.id = const Value.absent(),
+    this.enable = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+    this.userCreate = const Value.absent(),
+    this.userUpdate = const Value.absent(),
+    required int userId,
+    required String code,
+    this.clientName = const Value.absent(),
+    this.projectName = const Value.absent(),
+    this.phone = const Value.absent(),
+    required DateTime proformaDate,
+    this.currency = const Value.absent(),
+    this.status = const Value.absent(),
+    this.documentJson = const Value.absent(),
+  }) : userId = Value(userId),
+       code = Value(code),
+       proformaDate = Value(proformaDate);
+  static Insertable<Proforma> custom({
+    Expression<int>? id,
+    Expression<bool>? enable,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+    Expression<String>? userCreate,
+    Expression<String>? userUpdate,
+    Expression<int>? userId,
+    Expression<String>? code,
+    Expression<String>? clientName,
+    Expression<String>? projectName,
+    Expression<String>? phone,
+    Expression<DateTime>? proformaDate,
+    Expression<String>? currency,
+    Expression<String>? status,
+    Expression<String>? documentJson,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (enable != null) 'enable': enable,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+      if (userCreate != null) 'user_create': userCreate,
+      if (userUpdate != null) 'user_update': userUpdate,
+      if (userId != null) 'user_id': userId,
+      if (code != null) 'code': code,
+      if (clientName != null) 'client_name': clientName,
+      if (projectName != null) 'project_name': projectName,
+      if (phone != null) 'phone': phone,
+      if (proformaDate != null) 'proforma_date': proformaDate,
+      if (currency != null) 'currency': currency,
+      if (status != null) 'status': status,
+      if (documentJson != null) 'document_json': documentJson,
+    });
+  }
+
+  ProformasCompanion copyWith({
+    Value<int>? id,
+    Value<bool>? enable,
+    Value<DateTime>? createdAt,
+    Value<DateTime>? updatedAt,
+    Value<String?>? userCreate,
+    Value<String?>? userUpdate,
+    Value<int>? userId,
+    Value<String>? code,
+    Value<String>? clientName,
+    Value<String>? projectName,
+    Value<String?>? phone,
+    Value<DateTime>? proformaDate,
+    Value<String>? currency,
+    Value<String>? status,
+    Value<String>? documentJson,
+  }) {
+    return ProformasCompanion(
+      id: id ?? this.id,
+      enable: enable ?? this.enable,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      userCreate: userCreate ?? this.userCreate,
+      userUpdate: userUpdate ?? this.userUpdate,
+      userId: userId ?? this.userId,
+      code: code ?? this.code,
+      clientName: clientName ?? this.clientName,
+      projectName: projectName ?? this.projectName,
+      phone: phone ?? this.phone,
+      proformaDate: proformaDate ?? this.proformaDate,
+      currency: currency ?? this.currency,
+      status: status ?? this.status,
+      documentJson: documentJson ?? this.documentJson,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (enable.present) {
+      map['enable'] = Variable<bool>(enable.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    if (userCreate.present) {
+      map['user_create'] = Variable<String>(userCreate.value);
+    }
+    if (userUpdate.present) {
+      map['user_update'] = Variable<String>(userUpdate.value);
+    }
+    if (userId.present) {
+      map['user_id'] = Variable<int>(userId.value);
+    }
+    if (code.present) {
+      map['code'] = Variable<String>(code.value);
+    }
+    if (clientName.present) {
+      map['client_name'] = Variable<String>(clientName.value);
+    }
+    if (projectName.present) {
+      map['project_name'] = Variable<String>(projectName.value);
+    }
+    if (phone.present) {
+      map['phone'] = Variable<String>(phone.value);
+    }
+    if (proformaDate.present) {
+      map['proforma_date'] = Variable<DateTime>(proformaDate.value);
+    }
+    if (currency.present) {
+      map['currency'] = Variable<String>(currency.value);
+    }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
+    if (documentJson.present) {
+      map['document_json'] = Variable<String>(documentJson.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProformasCompanion(')
+          ..write('id: $id, ')
+          ..write('enable: $enable, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt, ')
+          ..write('userCreate: $userCreate, ')
+          ..write('userUpdate: $userUpdate, ')
+          ..write('userId: $userId, ')
+          ..write('code: $code, ')
+          ..write('clientName: $clientName, ')
+          ..write('projectName: $projectName, ')
+          ..write('phone: $phone, ')
+          ..write('proformaDate: $proformaDate, ')
+          ..write('currency: $currency, ')
+          ..write('status: $status, ')
+          ..write('documentJson: $documentJson')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -2787,6 +3692,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     this,
   );
   late final $PaymentMethodsTable paymentMethods = $PaymentMethodsTable(this);
+  late final $ProformasTable proformas = $ProformasTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2796,6 +3702,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     userDetails,
     userPreferences,
     paymentMethods,
+    proformas,
   ];
 }
 
@@ -2839,6 +3746,24 @@ final class $$UsersTableReferences
     ).filter((f) => f.userId.id.sqlEquals($_itemColumn<int>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_userDetailsRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
+
+  static MultiTypedResultKey<$ProformasTable, List<Proforma>>
+  _proformasRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.proformas,
+    aliasName: 'users__id__proformas__user_id',
+  );
+
+  $$ProformasTableProcessedTableManager get proformasRefs {
+    final manager = $$ProformasTableTableManager(
+      $_db,
+      $_db.proformas,
+    ).filter((f) => f.userId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_proformasRefsTable($_db));
     return ProcessedTableManager(
       manager.$state.copyWith(prefetchedData: cache),
     );
@@ -2909,6 +3834,31 @@ class $$UsersTableFilterComposer extends Composer<_$AppDatabase, $UsersTable> {
           }) => $$UserDetailsTableFilterComposer(
             $db: $db,
             $table: $db.userDetails,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
+  Expression<bool> proformasRefs(
+    Expression<bool> Function($$ProformasTableFilterComposer f) f,
+  ) {
+    final $$ProformasTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.proformas,
+      getReferencedColumn: (t) => t.userId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProformasTableFilterComposer(
+            $db: $db,
+            $table: $db.proformas,
             $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
             joinBuilder: joinBuilder,
             $removeJoinBuilderFromRootComposer:
@@ -3030,6 +3980,31 @@ class $$UsersTableAnnotationComposer
     );
     return f(composer);
   }
+
+  Expression<T> proformasRefs<T extends Object>(
+    Expression<T> Function($$ProformasTableAnnotationComposer a) f,
+  ) {
+    final $$ProformasTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.proformas,
+      getReferencedColumn: (t) => t.userId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$ProformasTableAnnotationComposer(
+            $db: $db,
+            $table: $db.proformas,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 }
 
 class $$UsersTableTableManager
@@ -3045,7 +4020,7 @@ class $$UsersTableTableManager
           $$UsersTableUpdateCompanionBuilder,
           (User, $$UsersTableReferences),
           User,
-          PrefetchHooks Function({bool userDetailsRefs})
+          PrefetchHooks Function({bool userDetailsRefs, bool proformasRefs})
         > {
   $$UsersTableTableManager(_$AppDatabase db, $UsersTable table)
     : super(
@@ -3104,28 +4079,59 @@ class $$UsersTableTableManager
                     (e.readTable(table), $$UsersTableReferences(db, table, e)),
               )
               .toList(),
-          prefetchHooksCallback: ({userDetailsRefs = false}) {
-            return PrefetchHooks(
-              db: db,
-              explicitlyWatchedTables: [if (userDetailsRefs) db.userDetails],
-              addJoins: null,
-              getPrefetchedDataCallback: (items) async {
-                return [
-                  if (userDetailsRefs)
-                    await $_getPrefetchedData<User, $UsersTable, UserDetail>(
-                      currentTable: table,
-                      referencedTable: $$UsersTableReferences
-                          ._userDetailsRefsTable(db),
-                      managerFromTypedResult: (p0) =>
-                          $$UsersTableReferences(db, table, p0).userDetailsRefs,
-                      referencedItemsForCurrentItem: (item, referencedItems) =>
-                          referencedItems.where((e) => e.userId == item.id),
-                      typedResults: items,
-                    ),
-                ];
+          prefetchHooksCallback:
+              ({userDetailsRefs = false, proformasRefs = false}) {
+                return PrefetchHooks(
+                  db: db,
+                  explicitlyWatchedTables: [
+                    if (userDetailsRefs) db.userDetails,
+                    if (proformasRefs) db.proformas,
+                  ],
+                  addJoins: null,
+                  getPrefetchedDataCallback: (items) async {
+                    return [
+                      if (userDetailsRefs)
+                        await $_getPrefetchedData<
+                          User,
+                          $UsersTable,
+                          UserDetail
+                        >(
+                          currentTable: table,
+                          referencedTable: $$UsersTableReferences
+                              ._userDetailsRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$UsersTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).userDetailsRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.userId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                      if (proformasRefs)
+                        await $_getPrefetchedData<User, $UsersTable, Proforma>(
+                          currentTable: table,
+                          referencedTable: $$UsersTableReferences
+                              ._proformasRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$UsersTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).proformasRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.userId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
+                    ];
+                  },
+                );
               },
-            );
-          },
         ),
       );
 }
@@ -3142,7 +4148,7 @@ typedef $$UsersTableProcessedTableManager =
       $$UsersTableUpdateCompanionBuilder,
       (User, $$UsersTableReferences),
       User,
-      PrefetchHooks Function({bool userDetailsRefs})
+      PrefetchHooks Function({bool userDetailsRefs, bool proformasRefs})
     >;
 typedef $$UserDetailsTableCreateCompanionBuilder =
     UserDetailsCompanion Function({
@@ -3842,6 +4848,7 @@ typedef $$UserPreferencesTableCreateCompanionBuilder =
       Value<String> colorTheme,
       Value<String> defaultCurrency,
       Value<String> defaultUnit,
+      Value<String?> companyName,
       Value<String?> companyLogoPath,
     });
 typedef $$UserPreferencesTableUpdateCompanionBuilder =
@@ -3857,6 +4864,7 @@ typedef $$UserPreferencesTableUpdateCompanionBuilder =
       Value<String> colorTheme,
       Value<String> defaultCurrency,
       Value<String> defaultUnit,
+      Value<String?> companyName,
       Value<String?> companyLogoPath,
     });
 
@@ -3944,6 +4952,11 @@ class $$UserPreferencesTableFilterComposer
 
   ColumnFilters<String> get defaultUnit => $composableBuilder(
     column: $table.defaultUnit,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get companyName => $composableBuilder(
+    column: $table.companyName,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4035,6 +5048,11 @@ class $$UserPreferencesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get companyName => $composableBuilder(
+    column: $table.companyName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get companyLogoPath => $composableBuilder(
     column: $table.companyLogoPath,
     builder: (column) => ColumnOrderings(column),
@@ -4113,6 +5131,11 @@ class $$UserPreferencesTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<String> get companyName => $composableBuilder(
+    column: $table.companyName,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get companyLogoPath => $composableBuilder(
     column: $table.companyLogoPath,
     builder: (column) => column,
@@ -4183,6 +5206,7 @@ class $$UserPreferencesTableTableManager
                 Value<String> colorTheme = const Value.absent(),
                 Value<String> defaultCurrency = const Value.absent(),
                 Value<String> defaultUnit = const Value.absent(),
+                Value<String?> companyName = const Value.absent(),
                 Value<String?> companyLogoPath = const Value.absent(),
               }) => UserPreferencesCompanion(
                 id: id,
@@ -4196,6 +5220,7 @@ class $$UserPreferencesTableTableManager
                 colorTheme: colorTheme,
                 defaultCurrency: defaultCurrency,
                 defaultUnit: defaultUnit,
+                companyName: companyName,
                 companyLogoPath: companyLogoPath,
               ),
           createCompanionCallback:
@@ -4211,6 +5236,7 @@ class $$UserPreferencesTableTableManager
                 Value<String> colorTheme = const Value.absent(),
                 Value<String> defaultCurrency = const Value.absent(),
                 Value<String> defaultUnit = const Value.absent(),
+                Value<String?> companyName = const Value.absent(),
                 Value<String?> companyLogoPath = const Value.absent(),
               }) => UserPreferencesCompanion.insert(
                 id: id,
@@ -4224,6 +5250,7 @@ class $$UserPreferencesTableTableManager
                 colorTheme: colorTheme,
                 defaultCurrency: defaultCurrency,
                 defaultUnit: defaultUnit,
+                companyName: companyName,
                 companyLogoPath: companyLogoPath,
               ),
           withReferenceMapper: (p0) => p0
@@ -4774,6 +5801,519 @@ typedef $$PaymentMethodsTableProcessedTableManager =
       PaymentMethod,
       PrefetchHooks Function({bool userDetailId})
     >;
+typedef $$ProformasTableCreateCompanionBuilder =
+    ProformasCompanion Function({
+      Value<int> id,
+      Value<bool> enable,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<String?> userCreate,
+      Value<String?> userUpdate,
+      required int userId,
+      required String code,
+      Value<String> clientName,
+      Value<String> projectName,
+      Value<String?> phone,
+      required DateTime proformaDate,
+      Value<String> currency,
+      Value<String> status,
+      Value<String> documentJson,
+    });
+typedef $$ProformasTableUpdateCompanionBuilder =
+    ProformasCompanion Function({
+      Value<int> id,
+      Value<bool> enable,
+      Value<DateTime> createdAt,
+      Value<DateTime> updatedAt,
+      Value<String?> userCreate,
+      Value<String?> userUpdate,
+      Value<int> userId,
+      Value<String> code,
+      Value<String> clientName,
+      Value<String> projectName,
+      Value<String?> phone,
+      Value<DateTime> proformaDate,
+      Value<String> currency,
+      Value<String> status,
+      Value<String> documentJson,
+    });
+
+final class $$ProformasTableReferences
+    extends BaseReferences<_$AppDatabase, $ProformasTable, Proforma> {
+  $$ProformasTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $UsersTable _userIdTable(_$AppDatabase db) =>
+      db.users.createAlias('proformas__user_id__users__id');
+
+  $$UsersTableProcessedTableManager get userId {
+    final $_column = $_itemColumn<int>('user_id')!;
+
+    final manager = $$UsersTableTableManager(
+      $_db,
+      $_db.users,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_userIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$ProformasTableFilterComposer
+    extends Composer<_$AppDatabase, $ProformasTable> {
+  $$ProformasTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get enable => $composableBuilder(
+    column: $table.enable,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get userCreate => $composableBuilder(
+    column: $table.userCreate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get userUpdate => $composableBuilder(
+    column: $table.userUpdate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get code => $composableBuilder(
+    column: $table.code,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get clientName => $composableBuilder(
+    column: $table.clientName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get projectName => $composableBuilder(
+    column: $table.projectName,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get phone => $composableBuilder(
+    column: $table.phone,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get proformaDate => $composableBuilder(
+    column: $table.proformaDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get currency => $composableBuilder(
+    column: $table.currency,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get documentJson => $composableBuilder(
+    column: $table.documentJson,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$UsersTableFilterComposer get userId {
+    final $$UsersTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableFilterComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ProformasTableOrderingComposer
+    extends Composer<_$AppDatabase, $ProformasTable> {
+  $$ProformasTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get enable => $composableBuilder(
+    column: $table.enable,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+    column: $table.updatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get userCreate => $composableBuilder(
+    column: $table.userCreate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get userUpdate => $composableBuilder(
+    column: $table.userUpdate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get code => $composableBuilder(
+    column: $table.code,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get clientName => $composableBuilder(
+    column: $table.clientName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get projectName => $composableBuilder(
+    column: $table.projectName,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get phone => $composableBuilder(
+    column: $table.phone,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get proformaDate => $composableBuilder(
+    column: $table.proformaDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get currency => $composableBuilder(
+    column: $table.currency,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get documentJson => $composableBuilder(
+    column: $table.documentJson,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$UsersTableOrderingComposer get userId {
+    final $$UsersTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableOrderingComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ProformasTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ProformasTable> {
+  $$ProformasTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<bool> get enable =>
+      $composableBuilder(column: $table.enable, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get userCreate => $composableBuilder(
+    column: $table.userCreate,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get userUpdate => $composableBuilder(
+    column: $table.userUpdate,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get code =>
+      $composableBuilder(column: $table.code, builder: (column) => column);
+
+  GeneratedColumn<String> get clientName => $composableBuilder(
+    column: $table.clientName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get projectName => $composableBuilder(
+    column: $table.projectName,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get phone =>
+      $composableBuilder(column: $table.phone, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get proformaDate => $composableBuilder(
+    column: $table.proformaDate,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get currency =>
+      $composableBuilder(column: $table.currency, builder: (column) => column);
+
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
+  GeneratedColumn<String> get documentJson => $composableBuilder(
+    column: $table.documentJson,
+    builder: (column) => column,
+  );
+
+  $$UsersTableAnnotationComposer get userId {
+    final $$UsersTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.userId,
+      referencedTable: $db.users,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$UsersTableAnnotationComposer(
+            $db: $db,
+            $table: $db.users,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$ProformasTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $ProformasTable,
+          Proforma,
+          $$ProformasTableFilterComposer,
+          $$ProformasTableOrderingComposer,
+          $$ProformasTableAnnotationComposer,
+          $$ProformasTableCreateCompanionBuilder,
+          $$ProformasTableUpdateCompanionBuilder,
+          (Proforma, $$ProformasTableReferences),
+          Proforma,
+          PrefetchHooks Function({bool userId})
+        > {
+  $$ProformasTableTableManager(_$AppDatabase db, $ProformasTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ProformasTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ProformasTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ProformasTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<bool> enable = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<String?> userCreate = const Value.absent(),
+                Value<String?> userUpdate = const Value.absent(),
+                Value<int> userId = const Value.absent(),
+                Value<String> code = const Value.absent(),
+                Value<String> clientName = const Value.absent(),
+                Value<String> projectName = const Value.absent(),
+                Value<String?> phone = const Value.absent(),
+                Value<DateTime> proformaDate = const Value.absent(),
+                Value<String> currency = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<String> documentJson = const Value.absent(),
+              }) => ProformasCompanion(
+                id: id,
+                enable: enable,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                userCreate: userCreate,
+                userUpdate: userUpdate,
+                userId: userId,
+                code: code,
+                clientName: clientName,
+                projectName: projectName,
+                phone: phone,
+                proformaDate: proformaDate,
+                currency: currency,
+                status: status,
+                documentJson: documentJson,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<bool> enable = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+                Value<DateTime> updatedAt = const Value.absent(),
+                Value<String?> userCreate = const Value.absent(),
+                Value<String?> userUpdate = const Value.absent(),
+                required int userId,
+                required String code,
+                Value<String> clientName = const Value.absent(),
+                Value<String> projectName = const Value.absent(),
+                Value<String?> phone = const Value.absent(),
+                required DateTime proformaDate,
+                Value<String> currency = const Value.absent(),
+                Value<String> status = const Value.absent(),
+                Value<String> documentJson = const Value.absent(),
+              }) => ProformasCompanion.insert(
+                id: id,
+                enable: enable,
+                createdAt: createdAt,
+                updatedAt: updatedAt,
+                userCreate: userCreate,
+                userUpdate: userUpdate,
+                userId: userId,
+                code: code,
+                clientName: clientName,
+                projectName: projectName,
+                phone: phone,
+                proformaDate: proformaDate,
+                currency: currency,
+                status: status,
+                documentJson: documentJson,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$ProformasTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({userId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (userId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.userId,
+                                referencedTable: $$ProformasTableReferences
+                                    ._userIdTable(db),
+                                referencedColumn: $$ProformasTableReferences
+                                    ._userIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$ProformasTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $ProformasTable,
+      Proforma,
+      $$ProformasTableFilterComposer,
+      $$ProformasTableOrderingComposer,
+      $$ProformasTableAnnotationComposer,
+      $$ProformasTableCreateCompanionBuilder,
+      $$ProformasTableUpdateCompanionBuilder,
+      (Proforma, $$ProformasTableReferences),
+      Proforma,
+      PrefetchHooks Function({bool userId})
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -4786,4 +6326,6 @@ class $AppDatabaseManager {
       $$UserPreferencesTableTableManager(_db, _db.userPreferences);
   $$PaymentMethodsTableTableManager get paymentMethods =>
       $$PaymentMethodsTableTableManager(_db, _db.paymentMethods);
+  $$ProformasTableTableManager get proformas =>
+      $$ProformasTableTableManager(_db, _db.proformas);
 }

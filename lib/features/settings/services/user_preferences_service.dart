@@ -110,6 +110,31 @@ class UserPreferencesService {
     });
   }
 
+  Future<UserPreference> updateCompanyProfile({
+    required int userId,
+    required String? companyName,
+    String? logoPath,
+    bool updateLogo = false,
+  }) {
+    return withMinDuration(() async {
+      final ensured = await bootstrapService.ensureForUser(userId);
+      final trimmed = companyName?.trim();
+      await (database.update(database.userPreferences)
+            ..where((t) => t.id.equals(ensured.preferences.id)))
+          .write(
+        UserPreferencesCompanion(
+          companyName: Value(
+            trimmed == null || trimmed.isEmpty ? null : trimmed,
+          ),
+          companyLogoPath:
+              updateLogo ? Value(logoPath) : const Value.absent(),
+          updatedAt: Value(DateTime.now()),
+        ),
+      );
+      return _reload(ensured.preferences.id);
+    });
+  }
+
   Future<UserPreference> _reload(int id) {
     return (database.select(database.userPreferences)
           ..where((t) => t.id.equals(id)))

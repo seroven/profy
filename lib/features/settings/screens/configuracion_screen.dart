@@ -146,10 +146,16 @@ class _ConfiguracionScreenState extends ConsumerState<ConfiguracionScreen> {
               children: [
                 SettingsTile(
                   icon: Icons.business_outlined,
-                  title: 'Logo de empresa',
-                  subtitle: prefs?.companyLogoPath == null
-                      ? 'Sin logo'
-                      : 'Logo configurado',
+                  title: 'Empresa',
+                  subtitle: () {
+                    final name = prefs?.companyName?.trim();
+                    final hasName = name != null && name.isNotEmpty;
+                    final hasLogo = prefs?.companyLogoPath != null;
+                    if (hasName && hasLogo) return name;
+                    if (hasName) return '$name · Sin logo';
+                    if (hasLogo) return 'Sin nombre · Logo configurado';
+                    return 'Nombre y logo para proformas';
+                  }(),
                   onTap: () =>
                       context.push('${ConfiguracionScreen.routePath}/empresa'),
                 ),
