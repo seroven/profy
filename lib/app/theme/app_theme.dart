@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app_color_theme.dart';
+import 'app_fonts.dart';
 
 /// Temas Material 3 sobrios para claro y oscuro.
 class AppTheme {
@@ -25,9 +26,18 @@ class AppTheme {
   }
 
   static ThemeData _base(ColorScheme colorScheme) {
+    final textTheme = ThemeData(
+      useMaterial3: true,
+      brightness: colorScheme.brightness,
+      colorScheme: colorScheme,
+      fontFamily: AppFonts.family,
+    ).textTheme.apply(fontFamily: AppFonts.family);
+
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
+      fontFamily: AppFonts.family,
+      textTheme: textTheme,
       visualDensity: VisualDensity.standard,
       appBarTheme: AppBarTheme(
         centerTitle: true,
