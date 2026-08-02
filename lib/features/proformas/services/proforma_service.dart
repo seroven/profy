@@ -99,6 +99,17 @@ class ProformaService {
     return (await getById(id))!;
   }
 
+  Future<Proforma> markDraft(int id) async {
+    await (database.update(database.proformas)..where((t) => t.id.equals(id)))
+        .write(
+      ProformasCompanion(
+        status: Value(ProformaStatus.draft.code),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+    return (await getById(id))!;
+  }
+
   Future<void> softDelete(int id) {
     return withMinDuration(() async {
       await (database.update(database.proformas)

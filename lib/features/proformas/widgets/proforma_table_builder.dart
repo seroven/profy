@@ -22,6 +22,27 @@ typedef ProformaDocumentChanged = void Function(ProformaDocument document);
 /// Paso horizontal único entre niveles (sección → subsección → fila).
 const double _indentStep = 16;
 
+/// Propaga si el documento es solo lectura (proforma terminada).
+class _DocEditScope extends InheritedWidget {
+  const _DocEditScope({
+    required this.readOnly,
+    required super.child,
+  });
+
+  final bool readOnly;
+
+  static bool readOnlyOf(BuildContext context) {
+    return context
+            .dependOnInheritedWidgetOfExactType<_DocEditScope>()
+            ?.readOnly ??
+        false;
+  }
+
+  @override
+  bool updateShouldNotify(_DocEditScope oldWidget) =>
+      readOnly != oldWidget.readOnly;
+}
+
 Future<void> _confirmDelete(
   BuildContext context, {
   required String title,
@@ -46,11 +67,13 @@ class ProformaTableBuilder extends StatelessWidget {
     required this.document,
     required this.defaultUnit,
     required this.onChanged,
+    this.readOnly = false,
   });
 
   final ProformaDocument document;
   final MeasureUnit defaultUnit;
   final ProformaDocumentChanged onChanged;
+  final bool readOnly;
 
   List<ProformaBlock> get _blocks => List<ProformaBlock>.from(document.blocks);
 
@@ -128,82 +151,108 @@ class ProformaTableBuilder extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final actions = _documentActions();
     final blocks = _blocks;
+    final helpText = readOnly
+        ? 'Vista del documento. Reabre como borrador para editar.'
+        : blocks.length > 1
+            ? 'Usa ≡ junto a eliminar para reordenar bloques.'
+            : 'Agrega tablas, textos, perfil o medios de pago al documento.';
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text('Documento', style: theme.textTheme.titleMedium),
-        const SizedBox(height: 8),
-        Text(
-          blocks.length > 1
-              ? 'Usa ≡ junto a eliminar para reordenar bloques.'
-              : 'Agrega tablas, textos, perfil o medios de pago al documento.',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: colorScheme.onSurface.withValues(alpha: 0.65),
-          ),
-        ),
-        const SizedBox(height: 14),
-        if (blocks.isEmpty)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              'El documento está vacío. Agrega el primer bloque.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurface.withValues(alpha: 0.55),
-              ),
+    return _DocEditScope(
+      readOnly: readOnly,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Documento', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Text(
+            helpText,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurface.withValues(alpha: 0.65),
             ),
-          )
-        else
-          ReorderableListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            buildDefaultDragHandles: false,
-            itemCount: blocks.length,
-            onReorderItem: _reorderBlocks,
-            onReorderStart: (_) => HapticFeedback.selectionClick(),
-            proxyDecorator: (child, index, animation) {
-              return AnimatedBuilder(
-                animation: animation,
-                builder: (context, _) {
-                  final t = Curves.easeOut.transform(animation.value);
-                  return Material(
-                    color: Colors.transparent,
-                    elevation: 2 + 4 * t,
-                    shadowColor: colorScheme.shadow.withValues(alpha: 0.25),
-                    borderRadius: BorderRadius.circular(16),
-                    child: child,
-                  );
-                },
-              );
-            },
-            itemBuilder: (context, index) {
-              final block = blocks[index];
-              final reorderHandle = ReorderableDragStartListener(
-                index: index,
-                child: Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: Icon(
-                    Icons.drag_handle_rounded,
-                    color: colorScheme.onSurface.withValues(alpha: 0.45),
-                  ),
-                ),
-              );
-              return Padding(
-                key: ValueKey(block.id),
-                padding: EdgeInsets.only(
-                  bottom: index == blocks.length - 1 ? 0 : 14,
-                ),
-                child: _blockEditor(block, reorderHandle: reorderHandle),
-              );
-            },
           ),
-        const SizedBox(height: 14),
-        AppButton(
-          label: blocks.isEmpty ? 'Agregar bloque' : 'Agregar otro bloque',
-          icon: Icons.add_rounded,
-          onPressed: () => _openDocumentMenu(context, actions),
-        ),
-      ],
+          const SizedBox(height: 14),
+          if (blocks.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                readOnly
+                    ? 'El documento está vacío.'
+                    : 'El documento está vacío. Agrega el primer bloque.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurface.withValues(alpha: 0.55),
+                ),
+              ),
+            )
+          else if (readOnly)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var index = 0; index < blocks.length; index++)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      bottom: index == blocks.length - 1 ? 0 : 14,
+                    ),
+                    child: _blockEditor(
+                      blocks[index],
+                      reorderHandle: const SizedBox.shrink(),
+                    ),
+                  ),
+              ],
+            )
+          else
+            ReorderableListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              buildDefaultDragHandles: false,
+              itemCount: blocks.length,
+              onReorderItem: _reorderBlocks,
+              onReorderStart: (_) => HapticFeedback.selectionClick(),
+              proxyDecorator: (child, index, animation) {
+                return AnimatedBuilder(
+                  animation: animation,
+                  builder: (context, _) {
+                    final t = Curves.easeOut.transform(animation.value);
+                    return Material(
+                      color: Colors.transparent,
+                      elevation: 2 + 4 * t,
+                      shadowColor: colorScheme.shadow.withValues(alpha: 0.25),
+                      borderRadius: BorderRadius.circular(16),
+                      child: child,
+                    );
+                  },
+                );
+              },
+              itemBuilder: (context, index) {
+                final block = blocks[index];
+                final reorderHandle = ReorderableDragStartListener(
+                  index: index,
+                  child: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: Icon(
+                      Icons.drag_handle_rounded,
+                      color: colorScheme.onSurface.withValues(alpha: 0.45),
+                    ),
+                  ),
+                );
+                return Padding(
+                  key: ValueKey(block.id),
+                  padding: EdgeInsets.only(
+                    bottom: index == blocks.length - 1 ? 0 : 14,
+                  ),
+                  child: _blockEditor(block, reorderHandle: reorderHandle),
+                );
+              },
+            ),
+          if (!readOnly) ...[
+            const SizedBox(height: 14),
+            AppButton(
+              label: blocks.isEmpty ? 'Agregar bloque' : 'Agregar otro bloque',
+              icon: Icons.add_rounded,
+              onPressed: () => _openDocumentMenu(context, actions),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -430,6 +479,7 @@ class _TextBlockEditorState extends ConsumerState<_TextBlockEditor> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final readOnly = _DocEditScope.readOnlyOf(context);
     final block = widget.block;
     final title = (block.title ?? '').trim().isEmpty
         ? 'Sin título'
@@ -458,51 +508,51 @@ class _TextBlockEditorState extends ConsumerState<_TextBlockEditor> {
                 ),
               ),
               widget.reorderHandle,
-              IconButton(
+              _DocDeleteButton(
                 tooltip: 'Eliminar texto',
-                onPressed: () => _confirmDelete(
-                  context,
-                  title: 'Eliminar texto',
-                  description:
-                      'Se eliminará este bloque de texto y sus imágenes.',
-                  onConfirm: widget.onRemove,
-                ),
-                icon: const Icon(Icons.delete_outline_rounded),
+                title: 'Eliminar texto',
+                description:
+                    'Se eliminará este bloque de texto y sus imágenes.',
+                onConfirm: widget.onRemove,
               ),
             ],
           ),
           const SizedBox(height: 10),
           Row(
             children: [
-              Tooltip(
-                message: hasEmoji
-                    ? 'Cambiar emoji (mantener para quitar)'
-                    : 'Elegir emoji',
-                child: Material(
-                  color: colorScheme.surfaceContainerHighest
-                      .withValues(alpha: 0.55),
-                  borderRadius: BorderRadius.circular(12),
-                  child: InkWell(
+              if (hasEmoji || !readOnly)
+                Tooltip(
+                  message: readOnly
+                      ? 'Emoji'
+                      : hasEmoji
+                          ? 'Cambiar emoji (mantener para quitar)'
+                          : 'Elegir emoji',
+                  child: Material(
+                    color: colorScheme.surfaceContainerHighest
+                        .withValues(alpha: 0.55),
                     borderRadius: BorderRadius.circular(12),
-                    onTap: _pickEmoji,
-                    onLongPress: hasEmoji ? _clearEmoji : null,
-                    child: SizedBox(
-                      width: 52,
-                      height: 52,
-                      child: Center(
-                        child: hasEmoji
-                            ? Text(emoji, style: const TextStyle(fontSize: 26))
-                            : Icon(
-                                Icons.emoji_emotions_outlined,
-                                color: colorScheme.onSurface
-                                    .withValues(alpha: 0.7),
-                              ),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: readOnly ? null : _pickEmoji,
+                      onLongPress:
+                          readOnly || !hasEmoji ? null : _clearEmoji,
+                      child: SizedBox(
+                        width: 52,
+                        height: 52,
+                        child: Center(
+                          child: hasEmoji
+                              ? Text(emoji, style: const TextStyle(fontSize: 26))
+                              : Icon(
+                                  Icons.emoji_emotions_outlined,
+                                  color: colorScheme.onSurface
+                                      .withValues(alpha: 0.7),
+                                ),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 10),
+              if (hasEmoji || !readOnly) const SizedBox(width: 10),
               Expanded(
                 child: _BoundField(
                   key: ValueKey('text_title_${block.id}'),
@@ -526,13 +576,14 @@ class _TextBlockEditorState extends ConsumerState<_TextBlockEditor> {
             focusNode: _contentFocus,
             minLines: 5,
             maxLines: 10,
+            readOnly: readOnly,
             inputFormatters: const [_MarkdownBulletInputFormatter()],
-            onChanged: (_) => _emitContent(),
-            decoration: const InputDecoration(
+            onChanged: readOnly ? null : (_) => _emitContent(),
+            decoration: InputDecoration(
               labelText: 'Contenido',
               alignLabelWithHint: true,
               isDense: true,
-              hintText: 'Escribe aquí…\n- Viñeta',
+              hintText: readOnly ? null : 'Escribe aquí…\n- Viñeta',
             ),
           ),
           const SizedBox(height: 12),
@@ -560,38 +611,39 @@ class _TextBlockEditorState extends ConsumerState<_TextBlockEditor> {
                           ),
                         ),
                       ),
-                      Positioned(
-                        top: -8,
-                        right: -8,
-                        child: IconButton.filledTonal(
-                          visualDensity: VisualDensity.compact,
-                          onPressed: () => _confirmDelete(
-                            context,
+                      if (!readOnly)
+                        Positioned(
+                          top: -8,
+                          right: -8,
+                          child: _DocDeleteButton(
+                            tooltip: 'Eliminar imagen',
                             title: 'Eliminar imagen',
                             description:
                                 'Se quitará esta imagen del bloque de texto.',
                             onConfirm: () => _removeImage(path),
+                            icon: Icons.close_rounded,
+                            iconSize: 16,
+                            filledTonal: true,
                           ),
-                          icon: const Icon(Icons.close_rounded, size: 16),
                         ),
-                      ),
                     ],
                   ),
               ],
             ),
             const SizedBox(height: 10),
           ],
-          OutlinedButton.icon(
-            onPressed: _picking ? null : _addImage,
-            icon: _picking
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.add_photo_alternate_outlined),
-            label: Text(_picking ? 'Agregando…' : 'Agregar imágenes'),
-          ),
+          if (!readOnly)
+            OutlinedButton.icon(
+              onPressed: _picking ? null : _addImage,
+              icon: _picking
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.add_photo_alternate_outlined),
+              label: Text(_picking ? 'Agregando…' : 'Agregar imágenes'),
+            ),
         ],
       ),
     );
@@ -668,16 +720,12 @@ class _ProfileBlockPreview extends ConsumerWidget {
                 ),
               ),
               reorderHandle,
-              IconButton(
+              _DocDeleteButton(
                 tooltip: 'Eliminar bloque',
-                onPressed: () => _confirmDelete(
-                  context,
-                  title: 'Eliminar perfil',
-                  description:
-                      'Se quitará el bloque de perfil del documento. Tus datos en Configuración no se borran.',
-                  onConfirm: onRemove,
-                ),
-                icon: const Icon(Icons.delete_outline_rounded),
+                title: 'Eliminar perfil',
+                description:
+                    'Se quitará el bloque de perfil del documento. Tus datos en Configuración no se borran.',
+                onConfirm: onRemove,
               ),
             ],
           ),
@@ -796,16 +844,12 @@ class _PaymentMethodsBlockPreview extends ConsumerWidget {
                 ),
               ),
               reorderHandle,
-              IconButton(
+              _DocDeleteButton(
                 tooltip: 'Eliminar bloque',
-                onPressed: () => _confirmDelete(
-                  context,
-                  title: 'Eliminar medios de pago',
-                  description:
-                      'Se quitará este bloque del documento. Tus medios en Configuración no se borran.',
-                  onConfirm: onRemove,
-                ),
-                icon: const Icon(Icons.delete_outline_rounded),
+                title: 'Eliminar medios de pago',
+                description:
+                    'Se quitará este bloque del documento. Tus medios en Configuración no se borran.',
+                onConfirm: onRemove,
               ),
             ],
           ),
@@ -970,16 +1014,12 @@ class _TableBlock extends StatelessWidget {
                 onSelected: (_) => _addSection(),
               ),
               reorderHandle,
-              IconButton(
+              _DocDeleteButton(
                 tooltip: 'Eliminar tabla',
-                onPressed: () => _confirmDelete(
-                  context,
-                  title: 'Eliminar tabla',
-                  description:
-                      'Se eliminará la tabla y todo su contenido (secciones, ítems, sumas y descuentos).',
-                  onConfirm: onRemove,
-                ),
-                icon: const Icon(Icons.delete_outline_rounded),
+                title: 'Eliminar tabla',
+                description:
+                    'Se eliminará la tabla y todo su contenido (secciones, ítems, sumas y descuentos).',
+                onConfirm: onRemove,
               ),
             ],
           );
@@ -1005,7 +1045,8 @@ class _TableBlock extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
               ],
-              if (table.sections.isEmpty)
+              if (table.sections.isEmpty &&
+                  !_DocEditScope.readOnlyOf(context))
                 Text(
                   'Agrega una sección con el botón +',
                   style: theme.textTheme.bodySmall?.copyWith(
@@ -1212,16 +1253,13 @@ class _SectionBlock extends StatelessWidget {
                 items: actions,
                 onSelected: (id) => _onAction(context, id),
               ),
-            IconButton(
+            _DocDeleteButton(
               tooltip: 'Eliminar sección',
-              onPressed: () => _confirmDelete(
-                context,
-                title: 'Eliminar sección',
-                description:
-                    'Se eliminará la sección y todo su contenido interno.',
-                onConfirm: onRemove,
-              ),
-              icon: const Icon(Icons.close_rounded),
+              title: 'Eliminar sección',
+              description:
+                  'Se eliminará la sección y todo su contenido interno.',
+              onConfirm: onRemove,
+              icon: Icons.close_rounded,
             ),
           ],
         );
@@ -1281,7 +1319,7 @@ class _SectionBlock extends StatelessWidget {
                 indent: _indentStep,
               ),
             ],
-            if (actions.isEmpty)
+            if (actions.isEmpty && !_DocEditScope.readOnlyOf(context))
               Padding(
                 padding: const EdgeInsets.only(top: 10),
                 child: Text(
@@ -1427,16 +1465,13 @@ class _SubsectionBlock extends StatelessWidget {
                 items: actions,
                 onSelected: (id) => _onAction(context, id),
               ),
-              IconButton(
+              _DocDeleteButton(
                 tooltip: 'Eliminar subsección',
-                onPressed: () => _confirmDelete(
-                  context,
-                  title: 'Eliminar subsección',
-                  description:
-                      'Se eliminará la subsección y sus ítems, sumas o descuentos.',
-                  onConfirm: onRemove,
-                ),
-                icon: const Icon(Icons.close_rounded),
+                title: 'Eliminar subsección',
+                description:
+                    'Se eliminará la subsección y sus ítems, sumas o descuentos.',
+                onConfirm: onRemove,
+                icon: Icons.close_rounded,
               ),
             ],
           );
@@ -1574,15 +1609,13 @@ class _ItemRow extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              IconButton(
+              _DocDeleteButton(
                 tooltip: 'Eliminar ítem',
-                onPressed: () => _confirmDelete(
-                  context,
-                  title: 'Eliminar ítem',
-                  description: 'Se eliminará este ítem de la lista.',
-                  onConfirm: onRemove,
-                ),
-                icon: const Icon(Icons.close_rounded, size: 20),
+                title: 'Eliminar ítem',
+                description: 'Se eliminará este ítem de la lista.',
+                onConfirm: onRemove,
+                icon: Icons.close_rounded,
+                iconSize: 20,
               ),
             ],
           ),
@@ -1644,8 +1677,9 @@ class _ItemRow extends StatelessWidget {
                   label: Text(unit.code),
                   selected: item.unit == unit.code,
                   visualDensity: VisualDensity.compact,
-                  onSelected: (_) =>
-                      onChanged(item.copyWith(unit: unit.code)),
+                  onSelected: _DocEditScope.readOnlyOf(context)
+                      ? null
+                      : (_) => onChanged(item.copyWith(unit: unit.code)),
                 ),
             ],
           ),
@@ -1711,14 +1745,13 @@ class _FinanceRow extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                IconButton(
-                  onPressed: () => _confirmDelete(
-                    context,
-                    title: 'Eliminar suma',
-                    description: 'Se eliminará esta fila de suma.',
-                    onConfirm: onRemove,
-                  ),
-                  icon: const Icon(Icons.close_rounded, size: 20),
+                _DocDeleteButton(
+                  tooltip: 'Eliminar suma',
+                  title: 'Eliminar suma',
+                  description: 'Se eliminará esta fila de suma.',
+                  onConfirm: onRemove,
+                  icon: Icons.close_rounded,
+                  iconSize: 20,
                 ),
               ],
             ),
@@ -1759,14 +1792,13 @@ class _FinanceRow extends StatelessWidget {
                   color: theme.colorScheme.error,
                 ),
               ),
-              IconButton(
-                onPressed: () => _confirmDelete(
-                  context,
-                  title: 'Eliminar descuento',
-                  description: 'Se eliminará esta fila de descuento.',
-                  onConfirm: onRemove,
-                ),
-                icon: const Icon(Icons.close_rounded, size: 20),
+              _DocDeleteButton(
+                tooltip: 'Eliminar descuento',
+                title: 'Eliminar descuento',
+                description: 'Se eliminará esta fila de descuento.',
+                onConfirm: onRemove,
+                icon: Icons.close_rounded,
+                iconSize: 20,
               ),
             ],
           ),
@@ -1964,10 +1996,59 @@ class _AddMenuButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (_DocEditScope.readOnlyOf(context)) return const SizedBox.shrink();
     return IconButton(
       tooltip: tooltip,
       onPressed: items.isEmpty ? null : () => _open(context),
       icon: const Icon(Icons.add_rounded),
+    );
+  }
+}
+
+class _DocDeleteButton extends StatelessWidget {
+  const _DocDeleteButton({
+    required this.tooltip,
+    required this.title,
+    required this.description,
+    required this.onConfirm,
+    this.icon = Icons.delete_outline_rounded,
+    this.iconSize,
+    this.filledTonal = false,
+  });
+
+  final String tooltip;
+  final String title;
+  final String description;
+  final VoidCallback onConfirm;
+  final IconData icon;
+  final double? iconSize;
+  final bool filledTonal;
+
+  @override
+  Widget build(BuildContext context) {
+    if (_DocEditScope.readOnlyOf(context)) return const SizedBox.shrink();
+
+    final iconWidget = Icon(icon, size: iconSize);
+    void handlePressed() => _confirmDelete(
+          context,
+          title: title,
+          description: description,
+          onConfirm: onConfirm,
+        );
+
+    if (filledTonal) {
+      return IconButton.filledTonal(
+        tooltip: tooltip,
+        visualDensity: VisualDensity.compact,
+        onPressed: handlePressed,
+        icon: iconWidget,
+      );
+    }
+
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: handlePressed,
+      icon: iconWidget,
     );
   }
 }
@@ -2123,11 +2204,13 @@ class _BoundFieldState extends State<_BoundField> {
 
   @override
   Widget build(BuildContext context) {
+    final readOnly = _DocEditScope.readOnlyOf(context);
     return TextFormField(
       controller: _controller,
       keyboardType: widget.keyboardType,
       inputFormatters: widget.inputFormatters,
-      onChanged: widget.onChanged,
+      readOnly: readOnly,
+      onChanged: readOnly ? null : widget.onChanged,
       decoration: InputDecoration(
         labelText: widget.label,
         isDense: true,

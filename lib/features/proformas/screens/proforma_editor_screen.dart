@@ -7,8 +7,11 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/database/app_database.dart';
 import '../../../shared/widgets/acrylic_surface.dart';
+import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/app_confirm_dialog.dart';
 import '../../../shared/widgets/app_loading_panel.dart';
 import '../../../shared/widgets/app_text_field.dart';
+import '../../../shared/widgets/app_toast.dart';
 import '../../settings/models/app_currency.dart';
 import '../../settings/models/measure_unit.dart';
 import '../../settings/providers/settings_providers.dart';
@@ -46,6 +49,7 @@ class _ProformaEditorScreenState extends ConsumerState<ProformaEditorScreen> {
 
   bool _hydrated = false;
   bool _dirty = false;
+  bool _actionBusy = false;
   ProformaSaveStatus _saveStatus = ProformaSaveStatus.idle;
   Timer? _debounceTimer;
   int _saveToken = 0;
@@ -97,7 +101,9 @@ class _ProformaEditorScreenState extends ConsumerState<ProformaEditorScreen> {
   }
 
   void _scheduleSave() {
-    if (!_hydrated) return;
+    if (!_hydrated || _actionBusy || _status == ProformaStatus.finished) {
+      return;
+    }
     _dirty = true;
     setState(() => _saveStatus = ProformaSaveStatus.pending);
     _debounceTimer?.cancel();
@@ -105,6 +111,7 @@ class _ProformaEditorScreenState extends ConsumerState<ProformaEditorScreen> {
   }
 
   void _onDocumentChanged(ProformaDocument document) {
+    if (_status == ProformaStatus.finished) return;
     setState(() => _document = document);
     _scheduleSave();
   }
@@ -134,9 +141,86 @@ class _ProformaEditorScreenState extends ConsumerState<ProformaEditorScreen> {
       _dirty = false;
       setState(() => _saveStatus = ProformaSaveStatus.saved);
       ref.invalidate(proformasListProvider);
+      ref.invalidate(proformaByIdProvider(widget.proformaId));
     } catch (_) {
       if (!mounted || token != _saveToken) return;
       setState(() => _saveStatus = ProformaSaveStatus.error);
+    }
+  }
+
+  Future<void> _saveNow() async {
+    if (!_hydrated || _actionBusy) return;
+    await _persist(immediate: true);
+    if (!mounted) return;
+    if (_saveStatus == ProformaSaveStatus.saved) {
+      AppToast.success(context, 'Proforma guardada');
+    } else if (_saveStatus == ProformaSaveStatus.error) {
+      AppToast.error(context, 'No se pudo guardar');
+    }
+  }
+
+  Future<void> _finishProforma() async {
+    if (!_hydrated || _actionBusy) return;
+    final confirmed = await AppConfirmDialog.show(
+      context,
+      title: 'Guardar y terminar',
+      description:
+          'La proforma pasará a estado Terminada. Podrás reabrirla como borrador si necesitas editarla después.',
+      confirmLabel: 'Terminar',
+      cancelLabel: 'Cancelar',
+      destructive: false,
+    );
+    if (!confirmed || !mounted) return;
+
+    setState(() => _actionBusy = true);
+    try {
+      await _persist(immediate: true);
+      if (!mounted) return;
+      if (_saveStatus == ProformaSaveStatus.error) {
+        AppToast.error(context, 'No se pudo guardar antes de terminar');
+        return;
+      }
+      await ref.read(proformaServiceProvider).markFinished(widget.proformaId);
+      if (!mounted) return;
+      setState(() => _status = ProformaStatus.finished);
+      ref.invalidate(proformasListProvider);
+      ref.invalidate(proformaByIdProvider(widget.proformaId));
+      AppToast.success(context, 'Proforma terminada');
+    } catch (_) {
+      if (mounted) {
+        AppToast.error(context, 'No se pudo terminar la proforma');
+      }
+    } finally {
+      if (mounted) setState(() => _actionBusy = false);
+    }
+  }
+
+  Future<void> _reopenAsDraft() async {
+    if (!_hydrated || _actionBusy) return;
+    final confirmed = await AppConfirmDialog.show(
+      context,
+      title: 'Reabrir como borrador',
+      description:
+          'La proforma volverá a estado Borrador y podrás seguir editándola.',
+      confirmLabel: 'Reabrir',
+      cancelLabel: 'Cancelar',
+    );
+    if (!confirmed || !mounted) return;
+
+    setState(() => _actionBusy = true);
+    try {
+      await ref.read(proformaServiceProvider).markDraft(widget.proformaId);
+      if (!mounted) return;
+      setState(() => _status = ProformaStatus.draft);
+      ref.invalidate(proformasListProvider);
+      ref.invalidate(proformaByIdProvider(widget.proformaId));
+      AppToast.success(context, 'Proforma reabierta como borrador');
+    } catch (_) {
+      if (mounted) {
+        AppToast.error(context, 'No se pudo reabrir la proforma');
+      }
+    } finally {
+      if (mounted) setState(() => _actionBusy = false);
     }
   }
 
@@ -274,6 +358,7 @@ class _ProformaEditorScreenState extends ConsumerState<ProformaEditorScreen> {
                       controller: _clientController,
                       label: 'Cliente',
                       textInputAction: TextInputAction.next,
+                      enabled: _status == ProformaStatus.draft,
                       onChanged: (_) => _scheduleSave(),
                     ),
                     const SizedBox(height: 14),
@@ -281,6 +366,7 @@ class _ProformaEditorScreenState extends ConsumerState<ProformaEditorScreen> {
                       controller: _projectController,
                       label: 'Proyecto',
                       textInputAction: TextInputAction.next,
+                      enabled: _status == ProformaStatus.draft,
                       onChanged: (_) => _scheduleSave(),
                     ),
                     const SizedBox(height: 14),
@@ -289,16 +375,19 @@ class _ProformaEditorScreenState extends ConsumerState<ProformaEditorScreen> {
                       label: 'Teléfono',
                       keyboardType: TextInputType.phone,
                       textInputAction: TextInputAction.done,
+                      enabled: _status == ProformaStatus.draft,
                       onChanged: (_) => _scheduleSave(),
                     ),
                     const SizedBox(height: 14),
                     InkWell(
                       borderRadius: BorderRadius.circular(12),
-                      onTap: _pickDate,
+                      onTap: _status == ProformaStatus.draft ? _pickDate : null,
                       child: InputDecorator(
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Fecha',
-                          suffixIcon: Icon(Icons.calendar_today_outlined),
+                          suffixIcon: _status == ProformaStatus.draft
+                              ? const Icon(Icons.calendar_today_outlined)
+                              : null,
                         ),
                         child: Text(
                           _formatDate(_date),
@@ -316,10 +405,12 @@ class _ProformaEditorScreenState extends ConsumerState<ProformaEditorScreen> {
                           ChoiceChip(
                             label: Text(item.label),
                             selected: _currency == item,
-                            onSelected: (_) {
-                              setState(() => _currency = item);
-                              _scheduleSave();
-                            },
+                            onSelected: _status == ProformaStatus.draft
+                                ? (_) {
+                                    setState(() => _currency = item);
+                                    _scheduleSave();
+                                  }
+                                : null,
                           ),
                       ],
                     ),
@@ -331,10 +422,40 @@ class _ProformaEditorScreenState extends ConsumerState<ProformaEditorScreen> {
                 ProformaTableBuilder(
                   document: _document,
                   defaultUnit: defaultUnit,
+                  readOnly: _status == ProformaStatus.finished,
                   onChanged: _onDocumentChanged,
                 )
               else
                 const AppLoadingPanel(message: 'Cargando documento…'),
+              const SizedBox(height: 28),
+              if (_status == ProformaStatus.draft) ...[
+                OutlinedButton.icon(
+                  onPressed: _actionBusy ? null : _saveNow,
+                  icon: const Icon(Icons.save_outlined),
+                  label: const Text('Guardar'),
+                ),
+                const SizedBox(height: 10),
+                AppButton(
+                  label: 'Guardar y terminar',
+                  icon: Icons.check_circle_outline_rounded,
+                  isLoading: _actionBusy,
+                  onPressed: _actionBusy ? null : _finishProforma,
+                ),
+              ] else ...[
+                Text(
+                  'Esta proforma está terminada. Puedes reabrirla si necesitas editarla.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurface.withValues(alpha: 0.65),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                AppButton(
+                  label: 'Reabrir como borrador',
+                  icon: Icons.lock_open_rounded,
+                  isLoading: _actionBusy,
+                  onPressed: _actionBusy ? null : _reopenAsDraft,
+                ),
+              ],
             ],
           );
         },
