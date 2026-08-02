@@ -21,12 +21,63 @@ abstract final class ProformaTotals {
     return itemsTotal(subsection.rows);
   }
 
+  /// Total de subsección tras su cadena suma/descuento (si existe).
+  static double subsectionRollupTotal({
+    required ProformaSection section,
+    required ProformaSubsection subsection,
+  }) {
+    final lastSum = subsection.rows.whereType<ProformaSumRow>().lastOrNull;
+    if (lastSum != null) {
+      final value = sumValue(
+        sum: lastSum,
+        section: section,
+        subsection: subsection,
+        rows: subsection.rows,
+      );
+      return chainNet(
+        rows: subsection.rows,
+        sum: lastSum,
+        sumAmount: value,
+      );
+    }
+    return itemsTotal(subsection.rows);
+  }
+
+  /// Total de sección listo para rollup a tabla (incluye su cadena finance).
+  static double sectionRollupTotal(ProformaSection section) {
+    final lastSum = section.rows.whereType<ProformaSumRow>().lastOrNull;
+    if (lastSum != null) {
+      final value = sumValue(
+        sum: lastSum,
+        section: section,
+        rows: section.rows,
+      );
+      return chainNet(
+        rows: section.rows,
+        sum: lastSum,
+        sumAmount: value,
+      );
+    }
+
+    if (section.usesSubsections) {
+      return section.subsections.fold<double>(
+        0,
+        (sum, sub) =>
+            sum +
+            subsectionRollupTotal(section: section, subsection: sub),
+      );
+    }
+
+    return itemsTotal(section.rows);
+  }
+
   /// Valor de una fila "Suma" según su destino.
   static double sumValue({
     required ProformaSumRow sum,
-    required ProformaSection section,
     required List<ProformaTableRow> rows,
+    ProformaSection? section,
     ProformaSubsection? subsection,
+    List<ProformaSection>? sections,
   }) {
     if (sum.target == ProformaSumTarget.chain) {
       final previous = _previousSum(rows, sum.id);
@@ -35,6 +86,7 @@ abstract final class ProformaTotals {
         sum: previous,
         section: section,
         subsection: subsection,
+        sections: sections,
         rows: rows,
       );
       return chainNet(
@@ -45,24 +97,33 @@ abstract final class ProformaTotals {
       );
     }
 
+    if (sum.target == ProformaSumTarget.table) {
+      final list = sections ?? const <ProformaSection>[];
+      return list.fold<double>(0, (acc, s) => acc + sectionRollupTotal(s));
+    }
+
+    final scopedSection = section;
+    if (scopedSection == null) return 0;
+
     if (sum.target == ProformaSumTarget.subsection) {
-      final target = subsection ?? _findSubsection(section, sum.targetId);
+      final target =
+          subsection ?? _findSubsection(scopedSection, sum.targetId);
       if (target == null) return 0;
       return subsectionItemsTotal(target);
     }
 
     // Sección: si tiene subsecciones → ítems − descuentos internos.
-    if (section.usesSubsections) {
+    if (scopedSection.usesSubsections) {
       var items = 0.0;
       var discounts = 0.0;
-      for (final sub in section.subsections) {
+      for (final sub in scopedSection.subsections) {
         items += itemsTotal(sub.rows);
         discounts += discountsTotal(sub.rows);
       }
       return items - discounts;
     }
 
-    return itemsTotal(section.rows);
+    return itemsTotal(scopedSection.rows);
   }
 
   /// Total neto tras la suma y los descuentos que la siguen.
@@ -113,6 +174,19 @@ abstract final class ProformaTotals {
 
   static bool hasAnySum(List<ProformaTableRow> rows) {
     return rows.any((row) => row is ProformaSumRow);
+  }
+
+  /// Hay contenido sumable en alguna sección (ítems o finance interno).
+  static bool tableHasSummableScope(List<ProformaSection> sections) {
+    for (final section in sections) {
+      if (section.rows.any((row) => row is ProformaItemRow)) return true;
+      if (hasAnySum(section.rows)) return true;
+      for (final sub in section.subsections) {
+        if (sub.rows.any((row) => row is ProformaItemRow)) return true;
+        if (hasAnySum(sub.rows)) return true;
+      }
+    }
+    return false;
   }
 
   /// Inserta un ítem antes del bloque suma/descuento.

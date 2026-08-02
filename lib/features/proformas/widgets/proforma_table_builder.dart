@@ -22,6 +22,15 @@ typedef ProformaDocumentChanged = void Function(ProformaDocument document);
 /// Paso horizontal único entre niveles (sección → subsección → fila).
 const double _indentStep = 16;
 
+/// Altura de cabecera con chip/monto (equivale a IconButton; evita colapso en solo lectura).
+const double _metaHeaderHeight = 40;
+
+/// Espacio entre cabecera (chip) e input con label flotante.
+const double _headerToFieldGap = 6;
+
+/// Espacio entre inputs.
+const double _fieldGap = 6;
+
 /// Propaga si el documento es solo lectura (proforma terminada).
 class _DocEditScope extends InheritedWidget {
   const _DocEditScope({
@@ -492,7 +501,7 @@ class _TextBlockEditorState extends ConsumerState<_TextBlockEditor> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
+          _MetaHeader(
             children: [
               const _TypeChip(label: 'Texto', tone: _ChipTone.text),
               const SizedBox(width: 10),
@@ -517,7 +526,7 @@ class _TextBlockEditorState extends ConsumerState<_TextBlockEditor> {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: _headerToFieldGap),
           Row(
             children: [
               if (hasEmoji || !readOnly)
@@ -706,7 +715,7 @@ class _ProfileBlockPreview extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
+          _MetaHeader(
             children: [
               const _TypeChip(label: 'Perfil', tone: _ChipTone.profile),
               const SizedBox(width: 10),
@@ -729,7 +738,7 @@ class _ProfileBlockPreview extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: _headerToFieldGap),
           Text(
             'Se muestra el perfil guardado en Configuración.',
             style: theme.textTheme.bodySmall?.copyWith(
@@ -830,7 +839,7 @@ class _PaymentMethodsBlockPreview extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
+          _MetaHeader(
             children: [
               const _TypeChip(label: 'Pagos', tone: _ChipTone.payment),
               const SizedBox(width: 10),
@@ -853,7 +862,7 @@ class _PaymentMethodsBlockPreview extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: _headerToFieldGap),
           Text(
             'Se listan los medios activos de Configuración.',
             style: theme.textTheme.bodySmall?.copyWith(
@@ -970,6 +979,10 @@ class _TableBlock extends StatelessWidget {
     );
   }
 
+  void _setRows(List<ProformaTableRow> rows) {
+    onChanged(table.copyWith(rows: rows));
+  }
+
   void _addSection() {
     onChanged(
       table.copyWith(sections: [...table.sections, ProformaSection.create()]),
@@ -984,11 +997,85 @@ class _TableBlock extends StatelessWidget {
     );
   }
 
+  void _addSum() {
+    if (!ProformaTotals.canAddSum(table.rows)) return;
+    final isChain = ProformaTotals.hasAnySum(table.rows);
+    _setRows([
+      ...table.rows,
+      ProformaSumRow.create(
+        targetId: table.id,
+        target: isChain
+            ? ProformaSumTarget.chain
+            : ProformaSumTarget.table,
+      ),
+    ]);
+  }
+
+  Future<void> _addDiscount(BuildContext context) async {
+    if (!ProformaTotals.canAddDiscount(table.rows)) return;
+    final sum = table.rows.whereType<ProformaSumRow>().lastOrNull;
+    if (sum == null) return;
+    final base = ProformaTotals.sumValue(
+      sum: sum,
+      sections: table.sections,
+      rows: table.rows,
+    );
+    final amount = await _askDiscountAmount(context, baseAmount: base);
+    if (amount == null) return;
+    _setRows([...table.rows, ProformaDiscountRow.create(amount: amount)]);
+  }
+
+  List<_AddAction> _actions() {
+    final actions = <_AddAction>[
+      const _AddAction(
+        id: 'section',
+        label: 'Sección',
+        icon: Icons.view_agenda_outlined,
+      ),
+    ];
+
+    final canSumScope = ProformaTotals.tableHasSummableScope(table.sections) ||
+        ProformaTotals.hasAnySum(table.rows);
+    if (canSumScope && ProformaTotals.canAddSum(table.rows)) {
+      actions.add(
+        _AddAction(
+          id: 'sum',
+          label: ProformaTotals.hasAnySum(table.rows)
+              ? 'Suma neta'
+              : 'Suma de tabla',
+          icon: Icons.functions_rounded,
+        ),
+      );
+    }
+    if (ProformaTotals.canAddDiscount(table.rows)) {
+      actions.add(
+        const _AddAction(
+          id: 'discount',
+          label: 'Descuento',
+          icon: Icons.percent_rounded,
+        ),
+      );
+    }
+    return actions;
+  }
+
+  Future<void> _onAction(BuildContext context, String id) async {
+    switch (id) {
+      case 'section':
+        _addSection();
+      case 'sum':
+        _addSum();
+      case 'discount':
+        await _addDiscount(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final title =
         table.name.trim().isEmpty ? 'Sin nombre' : table.name.trim();
+    final actions = _actions();
 
     return AcrylicSurface(
       padding: const EdgeInsets.all(16),
@@ -1004,14 +1091,8 @@ class _TableBlock extends StatelessWidget {
             trailing: [
               _AddMenuButton(
                 tooltip: 'Agregar en tabla',
-                items: const [
-                  _AddAction(
-                    id: 'section',
-                    label: 'Sección',
-                    icon: Icons.view_agenda_outlined,
-                  ),
-                ],
-                onSelected: (_) => _addSection(),
+                items: actions,
+                onSelected: (id) => _onAction(context, id),
               ),
               reorderHandle,
               _DocDeleteButton(
@@ -1025,7 +1106,7 @@ class _TableBlock extends StatelessWidget {
           );
         },
         body: Padding(
-          padding: const EdgeInsets.only(top: 10),
+          padding: const EdgeInsets.only(top: _headerToFieldGap),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -1045,6 +1126,12 @@ class _TableBlock extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
               ],
+              ..._financeOnlyRows(
+                rows: table.rows,
+                sections: table.sections,
+                onRowsChanged: _setRows,
+                indent: 0,
+              ),
               if (table.sections.isEmpty &&
                   !_DocEditScope.readOnlyOf(context))
                 Text(
@@ -1265,7 +1352,7 @@ class _SectionBlock extends StatelessWidget {
         );
       },
       body: Padding(
-        padding: const EdgeInsets.only(top: 8),
+        padding: const EdgeInsets.only(top: _headerToFieldGap),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -1477,7 +1564,7 @@ class _SubsectionBlock extends StatelessWidget {
           );
         },
         body: Padding(
-          padding: const EdgeInsets.only(top: 8),
+          padding: const EdgeInsets.only(top: _headerToFieldGap),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -1514,7 +1601,7 @@ List<Widget> _contentRows({
 }) {
   return [
     for (final row in rows) ...[
-      const SizedBox(height: 10),
+      const SizedBox(height: 7),
       if (row is ProformaItemRow)
         _ItemRow(
           item: row,
@@ -1550,20 +1637,22 @@ List<Widget> _contentRows({
 
 List<Widget> _financeOnlyRows({
   required List<ProformaTableRow> rows,
-  required ProformaSection section,
   required ValueChanged<List<ProformaTableRow>> onRowsChanged,
   required double indent,
+  ProformaSection? section,
+  List<ProformaSection>? sections,
 }) {
   final finance = rows.where(
     (row) => row is ProformaSumRow || row is ProformaDiscountRow,
   );
   return [
     for (final row in finance) ...[
-      const SizedBox(height: 10),
+      const SizedBox(height: 7),
       _FinanceRow(
         row: row,
         rows: rows,
         section: section,
+        sections: sections,
         indent: indent,
         onChanged: (updated) {
           onRowsChanged([
@@ -1599,7 +1688,7 @@ class _ItemRow extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
+          _MetaHeader(
             children: [
               const _TypeChip(label: 'Ítem', tone: _ChipTone.item),
               const Spacer(),
@@ -1619,14 +1708,14 @@ class _ItemRow extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: _headerToFieldGap),
           _BoundField(
             key: ValueKey('item_desc_${item.id}'),
             label: 'Descripción',
             initialValue: item.description,
             onChanged: (value) => onChanged(item.copyWith(description: value)),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: _fieldGap),
           Row(
             children: [
               Expanded(
@@ -1668,7 +1757,7 @@ class _ItemRow extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: _fieldGap),
           Wrap(
             spacing: 6,
             children: [
@@ -1693,16 +1782,18 @@ class _FinanceRow extends StatelessWidget {
   const _FinanceRow({
     required this.row,
     required this.rows,
-    required this.section,
     required this.onChanged,
     required this.onRemove,
+    this.section,
+    this.sections,
     this.subsection,
     this.indent = 0,
   });
 
   final ProformaTableRow row;
   final List<ProformaTableRow> rows;
-  final ProformaSection section;
+  final ProformaSection? section;
+  final List<ProformaSection>? sections;
   final ProformaSubsection? subsection;
   final ValueChanged<ProformaTableRow> onChanged;
   final VoidCallback onRemove;
@@ -1718,24 +1809,25 @@ class _FinanceRow extends StatelessWidget {
         sum: sum,
         section: section,
         subsection: subsection,
+        sections: sections,
         rows: rows,
       );
-      final net = ProformaTotals.chainNet(
-        rows: rows,
-        sum: sum,
-        sumAmount: value,
-      );
-      final isChain = sum.target == ProformaSumTarget.chain;
+      final chipLabel = switch (sum.target) {
+        ProformaSumTarget.chain => 'Suma neta',
+        ProformaSumTarget.table => 'Suma de tabla',
+        ProformaSumTarget.section => 'Suma de sección',
+        ProformaSumTarget.subsection => 'Suma',
+      };
 
       return Padding(
         padding: EdgeInsets.only(left: indent),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
+            _MetaHeader(
               children: [
                 _TypeChip(
-                  label: isChain ? 'Suma neta' : 'Suma',
+                  label: chipLabel,
                   tone: _ChipTone.sum,
                 ),
                 const Spacer(),
@@ -1755,21 +1847,13 @@ class _FinanceRow extends StatelessWidget {
                 ),
               ],
             ),
+            const SizedBox(height: _headerToFieldGap),
             _BoundField(
               key: ValueKey('sum_label_${sum.id}'),
               label: 'Etiqueta',
               initialValue: sum.label,
               onChanged: (value) => onChanged(sum.copyWith(label: value)),
             ),
-            if (!isChain && net != value) ...[
-              const SizedBox(height: 6),
-              Text(
-                'Neto tras descuentos: ${_money(net)}',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
-                ),
-              ),
-            ],
           ],
         ),
       );
@@ -1781,7 +1865,7 @@ class _FinanceRow extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
+          _MetaHeader(
             children: [
               const _TypeChip(label: 'Descuento', tone: _ChipTone.discount),
               const Spacer(),
@@ -1802,6 +1886,7 @@ class _FinanceRow extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: _headerToFieldGap),
           _BoundField(
             key: ValueKey('disc_label_${discount.id}'),
             label: 'Etiqueta',
@@ -1824,6 +1909,24 @@ enum _ChipTone {
   text,
   profile,
   payment,
+}
+
+/// Cabecera de fila/bloque con altura fija para no colapsar en solo lectura.
+class _MetaHeader extends StatelessWidget {
+  const _MetaHeader({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: _metaHeaderHeight,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: children,
+      ),
+    );
+  }
 }
 
 class _TypeChip extends StatelessWidget {

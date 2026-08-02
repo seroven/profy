@@ -15,6 +15,13 @@ enum AppCurrency {
         AppCurrency.eur => 'Euros',
       };
 
+  /// Prefijo monetario para montos (PDF / reportes).
+  String get prefix => switch (this) {
+        AppCurrency.pen => 'S/. ',
+        AppCurrency.usd => '\$ ',
+        AppCurrency.eur => '€ ',
+      };
+
   static AppCurrency fromCode(String code) {
     return AppCurrency.values.firstWhere(
       (item) => item.code == code,

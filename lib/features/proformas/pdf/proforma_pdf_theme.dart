@@ -13,6 +13,9 @@ abstract final class ProformaPdfTheme {
   static const PdfColor zebra = PdfColor.fromInt(0xFFF7F9FB);
   static const PdfColor sumBg = PdfColor.fromInt(0xFFEEF3F8);
   static const PdfColor discountBg = PdfColor.fromInt(0xFFF8F1F1);
+  /// Suma/descuento a nivel sección (más marcado que subsección).
+  static const PdfColor sectionSumBg = PdfColor.fromInt(0xFFC9D5E3);
+  static const PdfColor sectionDiscountBg = PdfColor.fromInt(0xFFE4D0D0);
   static const PdfColor white = PdfColors.white;
   static const PdfColor chipBg = PdfColor.fromInt(0xFFF0F4F8);
 
@@ -74,7 +77,8 @@ String pdfFormatDate(DateTime date) {
   return '$d/$m/${date.year}';
 }
 
-String pdfFormatMoney(double value) => value.toStringAsFixed(2);
+String pdfFormatMoney(double value, {String prefix = ''}) =>
+    '$prefix${value.toStringAsFixed(2)}';
 
 String pdfStripZeros(double value) {
   if (value == value.roundToDouble()) return value.toInt().toString();

@@ -14,28 +14,52 @@ const _colWidths = {
   4: pw.FlexColumnWidth(1.1),
 };
 
-/// Bloque tabla con grid completo, zebra y filas especiales.
-pw.Widget buildTableBlockPdf(ProformaTableBlock table) {
+const double _sectionGap = 16;
+const double _subsectionGap = 10;
+const double _sectionFinanceGap = 10;
+
+enum _FinanceTone { nested, section, table }
+
+/// Bloque tabla con grid completo y secciones en contorno.
+pw.Widget buildTableBlockPdf(
+  ProformaTableBlock table, {
+  required String moneyPrefix,
+}) {
   final title = table.name.trim().isEmpty ? 'Tabla' : table.name.trim();
+  final tableFinance = _financeRows(
+    rows: table.rows,
+    sections: table.sections,
+    moneyPrefix: moneyPrefix,
+    tone: _FinanceTone.table,
+  );
 
   return pdfBlockCard(
     title: title,
     icon: PdfDrawnIcon.table,
-    child: table.sections.isEmpty
+    child: table.sections.isEmpty && tableFinance.isEmpty
         ? pw.Text('Sin secciones.', style: ProformaPdfTheme.caption())
         : pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.stretch,
             children: [
               for (var i = 0; i < table.sections.length; i++) ...[
-                _sectionBox(table.sections[i]),
-                if (i < table.sections.length - 1) pw.SizedBox(height: 12),
+                _sectionBox(table.sections[i], moneyPrefix: moneyPrefix),
+                if (i < table.sections.length - 1)
+                  pw.SizedBox(height: _sectionGap),
+              ],
+              if (tableFinance.isNotEmpty) ...[
+                if (table.sections.isNotEmpty)
+                  pw.SizedBox(height: _sectionGap),
+                _financeOnlyGrid(tableFinance),
               ],
             ],
           ),
   );
 }
 
-pw.Widget _sectionBox(ProformaSection section) {
+pw.Widget _sectionBox(
+  ProformaSection section, {
+  required String moneyPrefix,
+}) {
   final sectionTitle = section.description.trim().isEmpty
       ? 'Sección'
       : section.description.trim();
@@ -45,13 +69,17 @@ pw.Widget _sectionBox(ProformaSection section) {
   ];
 
   if (section.usesSubsections) {
-    for (final sub in section.subsections) {
+    for (var i = 0; i < section.subsections.length; i++) {
+      final sub = section.subsections[i];
       final subTitle = sub.description.trim().isEmpty
           ? 'Subsección'
           : sub.description.trim();
-      body.add(
-        _fullBanner(subTitle, ProformaPdfTheme.subsectionBg),
-      );
+
+      if (i > 0) {
+        body.add(pw.SizedBox(height: _subsectionGap));
+      }
+
+      body.add(_fullBanner(subTitle, ProformaPdfTheme.subsectionBg));
       body.add(
         _dataGrid(
           items: sub.rows.whereType<ProformaItemRow>().toList(),
@@ -59,27 +87,44 @@ pw.Widget _sectionBox(ProformaSection section) {
             rows: sub.rows,
             section: section,
             subsection: sub,
+            moneyPrefix: moneyPrefix,
+            tone: _FinanceTone.nested,
           ),
+          moneyPrefix: moneyPrefix,
         ),
       );
     }
-    final sectionFinance = _financeRows(rows: section.rows, section: section);
+
+    final sectionFinance = _financeRows(
+      rows: section.rows,
+      section: section,
+      moneyPrefix: moneyPrefix,
+      tone: _FinanceTone.section,
+    );
     if (sectionFinance.isNotEmpty) {
+      body.add(pw.SizedBox(height: _sectionFinanceGap));
       body.add(_financeOnlyGrid(sectionFinance));
     }
   } else {
     body.add(
       _dataGrid(
         items: section.rows.whereType<ProformaItemRow>().toList(),
-        finance: _financeRows(rows: section.rows, section: section),
+        finance: _financeRows(
+          rows: section.rows,
+          section: section,
+          moneyPrefix: moneyPrefix,
+          tone: _FinanceTone.section,
+        ),
+        moneyPrefix: moneyPrefix,
       ),
     );
   }
 
   return pw.Container(
     decoration: pw.BoxDecoration(
-      border: pw.Border.all(color: ProformaPdfTheme.line, width: 0.8),
+      border: pw.Border.all(color: ProformaPdfTheme.line, width: 0.9),
       borderRadius: pw.BorderRadius.circular(6),
+      color: ProformaPdfTheme.white,
     ),
     child: pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.stretch,
@@ -111,10 +156,11 @@ pw.Widget _fullBanner(String text, PdfColor background) {
 pw.Widget _dataGrid({
   required List<ProformaItemRow> items,
   required List<pw.TableRow> finance,
+  required String moneyPrefix,
 }) {
   final rows = <pw.TableRow>[
     _columnHeaderRow(),
-    ..._itemRows(items),
+    ..._itemRows(items, moneyPrefix: moneyPrefix),
     ...finance,
   ];
 
@@ -169,7 +215,10 @@ pw.TableRow _columnHeaderRow() {
   );
 }
 
-List<pw.TableRow> _itemRows(List<ProformaItemRow> items) {
+List<pw.TableRow> _itemRows(
+  List<ProformaItemRow> items, {
+  required String moneyPrefix,
+}) {
   if (items.isEmpty) {
     return [
       pw.TableRow(
@@ -201,11 +250,11 @@ List<pw.TableRow> _itemRows(List<ProformaItemRow> items) {
           ),
           _cell(items[i].unit, align: pw.TextAlign.center),
           _cell(
-            pdfFormatMoney(items[i].unitPrice),
+            pdfFormatMoney(items[i].unitPrice, prefix: moneyPrefix),
             align: pw.TextAlign.right,
           ),
           _cell(
-            pdfFormatMoney(items[i].total),
+            pdfFormatMoney(items[i].total, prefix: moneyPrefix),
             align: pw.TextAlign.right,
             style: ProformaPdfTheme.tableCell().copyWith(
               fontWeight: pw.FontWeight.bold,
@@ -218,9 +267,21 @@ List<pw.TableRow> _itemRows(List<ProformaItemRow> items) {
 
 List<pw.TableRow> _financeRows({
   required List<ProformaTableRow> rows,
-  required ProformaSection section,
+  required String moneyPrefix,
+  required _FinanceTone tone,
+  ProformaSection? section,
   ProformaSubsection? subsection,
+  List<ProformaSection>? sections,
 }) {
+  final sumBg = switch (tone) {
+    _FinanceTone.section => ProformaPdfTheme.sectionSumBg,
+    _FinanceTone.nested || _FinanceTone.table => ProformaPdfTheme.sumBg,
+  };
+  final discountBg = switch (tone) {
+    _FinanceTone.section => ProformaPdfTheme.sectionDiscountBg,
+    _FinanceTone.nested || _FinanceTone.table => ProformaPdfTheme.discountBg,
+  };
+
   final result = <pw.TableRow>[];
   for (final row in rows) {
     if (row is ProformaSumRow) {
@@ -228,14 +289,15 @@ List<pw.TableRow> _financeRows({
         sum: row,
         section: section,
         subsection: subsection,
+        sections: sections,
         rows: rows,
       );
       final label = row.label.trim().isEmpty ? 'Suma' : row.label.trim();
       result.add(
         _financeTableRow(
           label: label,
-          amount: pdfFormatMoney(value),
-          background: ProformaPdfTheme.sumBg,
+          amount: pdfFormatMoney(value, prefix: moneyPrefix),
+          background: sumBg,
           emphasize: true,
         ),
       );
@@ -245,8 +307,8 @@ List<pw.TableRow> _financeRows({
       result.add(
         _financeTableRow(
           label: label,
-          amount: '-${pdfFormatMoney(row.amount)}',
-          background: ProformaPdfTheme.discountBg,
+          amount: '-${pdfFormatMoney(row.amount, prefix: moneyPrefix)}',
+          background: discountBg,
           emphasize: false,
         ),
       );

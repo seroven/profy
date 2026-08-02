@@ -88,10 +88,14 @@ class ProformaTableBlock extends ProformaBlock {
     required super.id,
     this.name = '',
     this.sections = const [],
+    this.rows = const [],
   });
 
   final String name;
   final List<ProformaSection> sections;
+
+  /// Sumas / descuentos a nivel tabla (scope: secciones).
+  final List<ProformaTableRow> rows;
 
   @override
   ProformaBlockType get type => ProformaBlockType.table;
@@ -104,6 +108,7 @@ class ProformaTableBlock extends ProformaBlock {
 
   factory ProformaTableBlock.fromJson(String id, Map<String, dynamic> json) {
     final raw = json['sections'];
+    final rawRows = json['rows'];
     return ProformaTableBlock(
       id: id,
       name: json['name'] as String? ?? '',
@@ -117,6 +122,17 @@ class ProformaTableBlock extends ProformaBlock {
               )
               .toList()
           : const [],
+      rows: rawRows is List
+          ? rawRows
+              .whereType<Map>()
+              .map(
+                (item) => ProformaTableRow.fromJson(
+                  Map<String, dynamic>.from(item),
+                ),
+              )
+              .whereType<ProformaTableRow>()
+              .toList()
+          : const [],
     );
   }
 
@@ -126,16 +142,19 @@ class ProformaTableBlock extends ProformaBlock {
         'type': type.name,
         'name': name,
         'sections': sections.map((s) => s.toJson()).toList(),
+        'rows': rows.map((r) => r.toJson()).toList(),
       };
 
   ProformaTableBlock copyWith({
     String? name,
     List<ProformaSection>? sections,
+    List<ProformaTableRow>? rows,
   }) {
     return ProformaTableBlock(
       id: id,
       name: name ?? this.name,
       sections: sections ?? this.sections,
+      rows: rows ?? this.rows,
     );
   }
 }
@@ -298,6 +317,7 @@ sealed class ProformaTableRow {
 }
 
 enum ProformaSumTarget {
+  table,
   section,
   subsection,
   /// Neto de la cadena anterior (suma + descuentos previos).
@@ -305,6 +325,7 @@ enum ProformaSumTarget {
 
   static ProformaSumTarget fromCode(String? code) {
     return switch (code) {
+      'table' => ProformaSumTarget.table,
       'section' => ProformaSumTarget.section,
       'chain' => ProformaSumTarget.chain,
       _ => ProformaSumTarget.subsection,
@@ -335,7 +356,12 @@ class ProformaSumRow extends ProformaTableRow {
         targetId: targetId,
         target: target,
         label: label ??
-            (target == ProformaSumTarget.chain ? 'Suma neta' : 'Suma'),
+            switch (target) {
+              ProformaSumTarget.chain => 'Suma neta',
+              ProformaSumTarget.table => 'Suma de tabla',
+              ProformaSumTarget.section => 'Suma de sección',
+              ProformaSumTarget.subsection => 'Suma',
+            },
       );
 
   factory ProformaSumRow.fromJson(String id, Map<String, dynamic> json) {

@@ -39,7 +39,6 @@ class ProformaPdfBuilder {
     }
 
     final doc = pw.Document(theme: theme, title: context.proforma.code);
-    final code = context.proforma.code;
 
     doc.addPage(
       pw.MultiPage(
@@ -61,15 +60,12 @@ class ProformaPdfBuilder {
                 top: pw.BorderSide(color: ProformaPdfTheme.line, width: 0.7),
               ),
             ),
-            child: pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text(code, style: ProformaPdfTheme.caption()),
-                pw.Text(
-                  'Página ${pageContext.pageNumber} / ${pageContext.pagesCount}',
-                  style: ProformaPdfTheme.caption(),
-                ),
-              ],
+            child: pw.Align(
+              alignment: pw.Alignment.centerRight,
+              child: pw.Text(
+                'Página ${pageContext.pageNumber} / ${pageContext.pagesCount}',
+                style: ProformaPdfTheme.caption(),
+              ),
             ),
           );
         },
@@ -99,7 +95,6 @@ class ProformaPdfBuilder {
 
   pw.Widget _buildHeader(ProformaPdfContext context, pw.MemoryImage? logo) {
     final company = (context.companyName ?? '').trim();
-    final currency = AppCurrency.fromCode(context.proforma.currency);
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.stretch,
@@ -146,24 +141,9 @@ class ProformaPdfBuilder {
                 ],
               ),
             ),
-            pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.end,
-              children: [
-                pdfChip(
-                  context.proforma.code,
-                  background: ProformaPdfTheme.accent,
-                  foreground: ProformaPdfTheme.white,
-                ),
-                pw.SizedBox(height: 6),
-                pw.Text(
-                  pdfFormatDate(context.proforma.proformaDate),
-                  style: ProformaPdfTheme.caption(),
-                ),
-                pw.Text(
-                  'Moneda ${currency.code}',
-                  style: ProformaPdfTheme.caption(),
-                ),
-              ],
+            pw.Text(
+              pdfFormatDate(context.proforma.proformaDate),
+              style: ProformaPdfTheme.caption(),
             ),
           ],
         ),
@@ -215,7 +195,13 @@ class ProformaPdfBuilder {
     ProformaPdfContext context,
   ) async {
     return switch (block) {
-      final ProformaTableBlock table => [buildTableBlockPdf(table)],
+      final ProformaTableBlock table => [
+          buildTableBlockPdf(
+            table,
+            moneyPrefix:
+                AppCurrency.fromCode(context.proforma.currency).prefix,
+          ),
+        ],
       final ProformaTextBlock text => await buildTextBlockPdf(text),
       final ProformaProfileBlock _ => [
           await buildProfileBlockPdf(context.profile),
