@@ -41,6 +41,8 @@ dependencies:
   path_provider: ^2.1.6
   pdf: ^3.13.0
   printing: ^5.15.0
+  bcrypt: ^1.2.0
+  shared_preferences: ^2.5.5
 
 dev_dependencies:
   flutter_test:
@@ -62,28 +64,26 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # Inter 18pt: pesos principales para UI. Los 24pt/28pt quedan en disco
-  # por si se necesitan después; no se empaquetan hasta registrarlos aquí.
   fonts:
-    - family: Inter
+    - family: Poppins
       fonts:
-        - asset: assets/fonts/Inter_18pt-Regular.ttf
+        - asset: assets/fonts/Poppins-Regular.ttf
           weight: 400
-        - asset: assets/fonts/Inter_18pt-Italic.ttf
+        - asset: assets/fonts/Poppins-Italic.ttf
           weight: 400
           style: italic
-        - asset: assets/fonts/Inter_18pt-Medium.ttf
+        - asset: assets/fonts/Poppins-Medium.ttf
           weight: 500
-        - asset: assets/fonts/Inter_18pt-MediumItalic.ttf
+        - asset: assets/fonts/Poppins-MediumItalic.ttf
           weight: 500
           style: italic
-        - asset: assets/fonts/Inter_18pt-SemiBold.ttf
+        - asset: assets/fonts/Poppins-SemiBold.ttf
           weight: 600
-        - asset: assets/fonts/Inter_18pt-SemiBoldItalic.ttf
+        - asset: assets/fonts/Poppins-SemiBoldItalic.ttf
           weight: 600
           style: italic
-        - asset: assets/fonts/Inter_18pt-Bold.ttf
+        - asset: assets/fonts/Poppins-Bold.ttf
           weight: 700
-        - asset: assets/fonts/Inter_18pt-BoldItalic.ttf
+        - asset: assets/fonts/Poppins-BoldItalic.ttf
           weight: 700
           style: italic
