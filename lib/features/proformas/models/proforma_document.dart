@@ -488,6 +488,10 @@ class ProformaTextBlock extends ProformaBlock {
   @override
   ProformaBlockType get type => ProformaBlockType.text;
 
+  factory ProformaTextBlock.create() => ProformaTextBlock(
+        id: ProformaIds.next('text'),
+      );
+
   factory ProformaTextBlock.fromJson(String id, Map<String, dynamic> json) {
     final images = json['imagePaths'] ?? json['image_paths'];
     return ProformaTextBlock(
@@ -510,6 +514,23 @@ class ProformaTextBlock extends ProformaBlock {
         'content': content,
         'imagePaths': imagePaths,
       };
+
+  ProformaTextBlock copyWith({
+    String? emoji,
+    String? title,
+    String? content,
+    List<String>? imagePaths,
+    bool clearEmoji = false,
+    bool clearTitle = false,
+  }) {
+    return ProformaTextBlock(
+      id: id,
+      emoji: clearEmoji ? null : (emoji ?? this.emoji),
+      title: clearTitle ? null : (title ?? this.title),
+      content: content ?? this.content,
+      imagePaths: imagePaths ?? this.imagePaths,
+    );
+  }
 }
 
 class ProformaProfileBlock extends ProformaBlock {
@@ -517,6 +538,10 @@ class ProformaProfileBlock extends ProformaBlock {
 
   @override
   ProformaBlockType get type => ProformaBlockType.profile;
+
+  factory ProformaProfileBlock.create() => ProformaProfileBlock(
+        id: ProformaIds.next('profile'),
+      );
 
   @override
   Map<String, dynamic> toJson() => {
@@ -530,6 +555,10 @@ class ProformaPaymentMethodsBlock extends ProformaBlock {
 
   @override
   ProformaBlockType get type => ProformaBlockType.paymentMethods;
+
+  factory ProformaPaymentMethodsBlock.create() => ProformaPaymentMethodsBlock(
+        id: ProformaIds.next('pay'),
+      );
 
   @override
   Map<String, dynamic> toJson() => {

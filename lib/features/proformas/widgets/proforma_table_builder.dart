@@ -1,10 +1,18 @@
+import 'dart:io';
+
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../app/theme/app_motion.dart';
 import '../../../shared/widgets/acrylic_surface.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../settings/models/measure_unit.dart';
+import '../../settings/models/payment_method_type.dart';
+import '../../../core/database/app_database.dart';
+import '../../settings/providers/settings_providers.dart';
 import '../models/proforma_document.dart';
 import '../models/proforma_totals.dart';
 
@@ -13,7 +21,7 @@ typedef ProformaDocumentChanged = void Function(ProformaDocument document);
 /// Paso horizontal único entre niveles (sección → subsección → fila).
 const double _indentStep = 16;
 
-/// Builder tipográfico: una sola caja (tabla) + chips + sangría. Sin cards internas.
+/// Builder de documento: tablas, texto, perfil y medios de pago.
 class ProformaTableBuilder extends StatelessWidget {
   const ProformaTableBuilder({
     super.key,
@@ -32,25 +40,67 @@ class ProformaTableBuilder extends StatelessWidget {
     onChanged(document.copyWith(blocks: blocks));
   }
 
-  void _addTable() {
-    _emit([..._blocks, ProformaTableBlock.create()]);
-  }
-
-  void _replaceTable(ProformaTableBlock table) {
+  void _replaceBlock(ProformaBlock block) {
     _emit([
-      for (final block in _blocks)
-        if (block.id == table.id) table else block,
+      for (final item in _blocks)
+        if (item.id == block.id) block else item,
     ]);
   }
 
-  void _removeTable(String tableId) {
-    _emit(_blocks.where((block) => block.id != tableId).toList());
+  void _removeBlock(String blockId) {
+    _emit(_blocks.where((block) => block.id != blockId).toList());
+  }
+
+  void _addBlock(ProformaBlock block) {
+    _emit([..._blocks, block]);
+  }
+
+  List<_AddAction> _documentActions() {
+    final hasProfile = _blocks.any((b) => b is ProformaProfileBlock);
+    final hasPayments = _blocks.any((b) => b is ProformaPaymentMethodsBlock);
+    return [
+      const _AddAction(
+        id: 'table',
+        label: 'Tabla',
+        icon: Icons.table_chart_outlined,
+      ),
+      const _AddAction(
+        id: 'text',
+        label: 'Texto',
+        icon: Icons.notes_rounded,
+      ),
+      if (!hasProfile)
+        const _AddAction(
+          id: 'profile',
+          label: 'Perfil',
+          icon: Icons.person_outline_rounded,
+        ),
+      if (!hasPayments)
+        const _AddAction(
+          id: 'payment',
+          label: 'Medios de pago',
+          icon: Icons.payments_outlined,
+        ),
+    ];
+  }
+
+  void _onDocumentAction(String id) {
+    switch (id) {
+      case 'table':
+        _addBlock(ProformaTableBlock.create());
+      case 'text':
+        _addBlock(ProformaTextBlock.create());
+      case 'profile':
+        _addBlock(ProformaProfileBlock.create());
+      case 'payment':
+        _addBlock(ProformaPaymentMethodsBlock.create());
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final tables = document.tables;
+    final actions = _documentActions();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -58,28 +108,677 @@ class ProformaTableBuilder extends StatelessWidget {
         Text('Documento', style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
         Text(
-          'Agrega tablas con secciones, subsecciones, ítems, sumas y descuentos.',
+          'Agrega tablas, textos, perfil o medios de pago al documento.',
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
           ),
         ),
         const SizedBox(height: 14),
-        for (final table in tables) ...[
-          _TableBlock(
-            table: table,
-            defaultUnit: defaultUnit,
-            onChanged: _replaceTable,
-            onRemove: () => _removeTable(table.id),
-          ),
+        for (final block in _blocks) ...[
+          switch (block) {
+            final ProformaTableBlock table => _TableBlock(
+                table: table,
+                defaultUnit: defaultUnit,
+                onChanged: _replaceBlock,
+                onRemove: () => _removeBlock(table.id),
+              ),
+            final ProformaTextBlock text => _TextBlockEditor(
+                block: text,
+                onChanged: _replaceBlock,
+                onRemove: () => _removeBlock(text.id),
+              ),
+            final ProformaProfileBlock profile => _ProfileBlockPreview(
+                onRemove: () => _removeBlock(profile.id),
+              ),
+            final ProformaPaymentMethodsBlock payment =>
+              _PaymentMethodsBlockPreview(
+                onRemove: () => _removeBlock(payment.id),
+              ),
+          },
           const SizedBox(height: 14),
         ],
+        if (_blocks.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              'El documento está vacío. Agrega el primer bloque.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+              ),
+            ),
+          ),
         AppButton(
-          label: tables.isEmpty ? 'Crear tabla' : 'Agregar otra tabla',
-          icon: Icons.table_chart_outlined,
-          onPressed: _addTable,
+          label: _blocks.isEmpty ? 'Agregar bloque' : 'Agregar otro bloque',
+          icon: Icons.add_rounded,
+          onPressed: () => _openDocumentMenu(context, actions),
         ),
       ],
     );
+  }
+
+  Future<void> _openDocumentMenu(
+    BuildContext context,
+    List<_AddAction> actions,
+  ) async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final action in actions)
+                ListTile(
+                  leading: Icon(action.icon),
+                  title: Text(action.label),
+                  onTap: () => Navigator.of(sheetContext).pop(action.id),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+    if (selected != null) _onDocumentAction(selected);
+  }
+}
+
+class _TextBlockEditor extends ConsumerStatefulWidget {
+  const _TextBlockEditor({
+    required this.block,
+    required this.onChanged,
+    required this.onRemove,
+  });
+
+  final ProformaTextBlock block;
+  final ValueChanged<ProformaBlock> onChanged;
+  final VoidCallback onRemove;
+
+  @override
+  ConsumerState<_TextBlockEditor> createState() => _TextBlockEditorState();
+}
+
+class _TextBlockEditorState extends ConsumerState<_TextBlockEditor> {
+  late final TextEditingController _contentController;
+  late final FocusNode _contentFocus;
+  bool _picking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _contentController = TextEditingController(text: widget.block.content);
+    _contentFocus = FocusNode();
+  }
+
+  @override
+  void didUpdateWidget(covariant _TextBlockEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.block.id != widget.block.id) {
+      _contentController.text = widget.block.content;
+    } else if (widget.block.content != _contentController.text &&
+        !_contentFocus.hasFocus) {
+      _contentController.text = widget.block.content;
+    }
+  }
+
+  @override
+  void dispose() {
+    _contentController.dispose();
+    _contentFocus.dispose();
+    super.dispose();
+  }
+
+  void _emitContent() {
+    widget.onChanged(widget.block.copyWith(content: _contentController.text));
+  }
+
+  Future<void> _pickEmoji() async {
+    final colorScheme = Theme.of(context).colorScheme;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      useSafeArea: true,
+      backgroundColor: colorScheme.surface,
+      constraints: BoxConstraints(
+        minWidth: screenWidth,
+        maxWidth: screenWidth,
+        maxHeight: 420,
+      ),
+      builder: (sheetContext) {
+        return Material(
+          color: colorScheme.surface,
+          child: SizedBox(
+            width: screenWidth,
+            height: 360,
+            child: EmojiPicker(
+              onEmojiSelected: (category, emoji) {
+                Navigator.of(sheetContext).pop(emoji.emoji);
+              },
+              config: Config(
+                height: 360,
+                // En algunos Android el filtro nativo deja el picker en blanco.
+                checkPlatformCompatibility: false,
+                viewOrderConfig: const ViewOrderConfig(
+                  top: EmojiPickerItem.categoryBar,
+                  middle: EmojiPickerItem.emojiView,
+                  bottom: EmojiPickerItem.searchBar,
+                ),
+                emojiViewConfig: EmojiViewConfig(
+                  backgroundColor: colorScheme.surface,
+                  columns: 8,
+                  loadingIndicator: const Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  noRecents: Text(
+                    'Sin recientes',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: colorScheme.onSurface.withValues(alpha: 0.45),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                categoryViewConfig: CategoryViewConfig(
+                  initCategory: Category.SMILEYS,
+                  recentTabBehavior: RecentTabBehavior.NONE,
+                  backgroundColor: colorScheme.surface,
+                  indicatorColor: colorScheme.primary,
+                  iconColorSelected: colorScheme.primary,
+                  iconColor: colorScheme.onSurface.withValues(alpha: 0.55),
+                  dividerColor: colorScheme.outline.withValues(alpha: 0.2),
+                ),
+                searchViewConfig: SearchViewConfig(
+                  backgroundColor: colorScheme.surface,
+                  buttonIconColor: colorScheme.onSurface,
+                ),
+                bottomActionBarConfig: const BottomActionBarConfig(
+                  enabled: false,
+                ),
+                skinToneConfig: const SkinToneConfig(enabled: false),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+    if (selected == null || !mounted) return;
+    widget.onChanged(widget.block.copyWith(emoji: selected));
+  }
+
+  void _clearEmoji() {
+    widget.onChanged(widget.block.copyWith(clearEmoji: true));
+  }
+
+  Future<void> _addImage() async {
+    if (_picking) return;
+    setState(() => _picking = true);
+    try {
+      final file = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1600,
+        imageQuality: 85,
+      );
+      if (file == null) return;
+      final storage = ref.read(localImageStorageProvider);
+      final path = await storage.saveImage(
+        source: File(file.path),
+        folder: 'proforma_text',
+        fileName: '${widget.block.id}_${DateTime.now().millisecondsSinceEpoch}',
+      );
+      widget.onChanged(
+        widget.block.copyWith(
+          imagePaths: [...widget.block.imagePaths, path],
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
+  Future<void> _removeImage(String path) async {
+    final next = widget.block.imagePaths.where((item) => item != path).toList();
+    widget.onChanged(widget.block.copyWith(imagePaths: next));
+    await ref.read(localImageStorageProvider).deleteIfExists(path);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final block = widget.block;
+    final title = (block.title ?? '').trim().isEmpty
+        ? 'Sin título'
+        : block.title!.trim();
+    final emoji = (block.emoji ?? '').trim();
+    final hasEmoji = emoji.isNotEmpty;
+
+    return AcrylicSurface(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const _TypeChip(label: 'Texto', tone: _ChipTone.text),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: colorScheme.onSurface.withValues(alpha: 0.65),
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Eliminar texto',
+                onPressed: widget.onRemove,
+                icon: const Icon(Icons.delete_outline_rounded),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Tooltip(
+                message: hasEmoji
+                    ? 'Cambiar emoji (mantener para quitar)'
+                    : 'Elegir emoji',
+                child: Material(
+                  color: colorScheme.surfaceContainerHighest
+                      .withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(12),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: _pickEmoji,
+                    onLongPress: hasEmoji ? _clearEmoji : null,
+                    child: SizedBox(
+                      width: 52,
+                      height: 52,
+                      child: Center(
+                        child: hasEmoji
+                            ? Text(emoji, style: const TextStyle(fontSize: 26))
+                            : Icon(
+                                Icons.emoji_emotions_outlined,
+                                color: colorScheme.onSurface
+                                    .withValues(alpha: 0.7),
+                              ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _BoundField(
+                  key: ValueKey('text_title_${block.id}'),
+                  label: 'Título',
+                  initialValue: block.title ?? '',
+                  onChanged: (value) {
+                    final trimmed = value.trim();
+                    widget.onChanged(
+                      trimmed.isEmpty
+                          ? block.copyWith(clearTitle: true)
+                          : block.copyWith(title: value),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _contentController,
+            focusNode: _contentFocus,
+            minLines: 5,
+            maxLines: 10,
+            inputFormatters: const [_MarkdownBulletInputFormatter()],
+            onChanged: (_) => _emitContent(),
+            decoration: const InputDecoration(
+              labelText: 'Contenido',
+              alignLabelWithHint: true,
+              isDense: true,
+              hintText: 'Escribe aquí…\n- Viñeta',
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (block.imagePaths.isNotEmpty) ...[
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final path in block.imagePaths)
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image.file(
+                          File(path),
+                          width: 88,
+                          height: 88,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => Container(
+                            width: 88,
+                            height: 88,
+                            color: colorScheme.surfaceContainerHighest,
+                            child: const Icon(Icons.broken_image_outlined),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        top: -8,
+                        right: -8,
+                        child: IconButton.filledTonal(
+                          visualDensity: VisualDensity.compact,
+                          onPressed: () => _removeImage(path),
+                          icon: const Icon(Icons.close_rounded, size: 16),
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+          ],
+          OutlinedButton.icon(
+            onPressed: _picking ? null : _addImage,
+            icon: _picking
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.add_photo_alternate_outlined),
+            label: Text(_picking ? 'Agregando…' : 'Agregar imagen'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Continúa viñetas markdown (`- ` / `* `) al pulsar Enter; sale con viñeta vacía.
+class _MarkdownBulletInputFormatter extends TextInputFormatter {
+  const _MarkdownBulletInputFormatter();
+
+  static const _prefix = '- ';
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    if (newValue.text.length != oldValue.text.length + 1) return newValue;
+    final cursor = newValue.selection.baseOffset;
+    if (cursor <= 0 || newValue.text[cursor - 1] != '\n') return newValue;
+
+    final before = newValue.text.substring(0, cursor - 1);
+    final lineStart = before.lastIndexOf('\n') + 1;
+    final prevLine = before.substring(lineStart);
+    final isBullet = prevLine.startsWith(_prefix) || prevLine.startsWith('* ');
+    if (!isBullet) return newValue;
+
+    if (prevLine == _prefix || prevLine == '* ') {
+      final without = newValue.text.replaceRange(lineStart, cursor, '');
+      return TextEditingValue(
+        text: without,
+        selection: TextSelection.collapsed(offset: lineStart),
+      );
+    }
+
+    final withBullet = newValue.text.replaceRange(cursor, cursor, _prefix);
+    return TextEditingValue(
+      text: withBullet,
+      selection: TextSelection.collapsed(offset: cursor + _prefix.length),
+    );
+  }
+}
+
+class _ProfileBlockPreview extends ConsumerWidget {
+  const _ProfileBlockPreview({required this.onRemove});
+
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final detailAsync = ref.watch(userDetailProvider);
+
+    return AcrylicSurface(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const _TypeChip(label: 'Perfil', tone: _ChipTone.profile),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Datos del contacto',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Eliminar bloque',
+                onPressed: onRemove,
+                icon: const Icon(Icons.delete_outline_rounded),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Se muestra el perfil guardado en Configuración.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+            ),
+          ),
+          const SizedBox(height: 12),
+          detailAsync.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
+            error: (_, _) => Text(
+              'No se pudo cargar el perfil.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            ),
+            data: (detail) {
+              if (detail == null) {
+                return Text(
+                  'Completa tu perfil en Configuración para verlo aquí.',
+                  style: theme.textTheme.bodyMedium,
+                );
+              }
+              final name = [
+                detail.firstName,
+                detail.lastName,
+              ].whereType<String>().where((s) => s.trim().isNotEmpty).join(' ');
+              final lines = <String>[
+                if (name.isNotEmpty) name,
+                if ((detail.phone ?? '').trim().isNotEmpty) detail.phone!,
+                if ((detail.email ?? '').trim().isNotEmpty) detail.email!,
+                if ((detail.dni ?? '').trim().isNotEmpty) 'DNI ${detail.dni}',
+                if ((detail.ruc ?? '').trim().isNotEmpty) 'RUC ${detail.ruc}',
+              ];
+              final photo = detail.photoPath;
+              final hasPhoto = photo != null && File(photo).existsSync();
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 28,
+                    backgroundImage:
+                        hasPhoto ? FileImage(File(photo)) : null,
+                    child: hasPhoto
+                        ? null
+                        : const Icon(Icons.person_outline_rounded),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: lines.isEmpty
+                        ? Text(
+                            'Perfil sin datos aún.',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurface
+                                  .withValues(alpha: 0.55),
+                            ),
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              for (final line in lines)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 2),
+                                  child: Text(line),
+                                ),
+                            ],
+                          ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PaymentMethodsBlockPreview extends ConsumerWidget {
+  const _PaymentMethodsBlockPreview({required this.onRemove});
+
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final methodsAsync = ref.watch(paymentMethodsProvider);
+
+    return AcrylicSurface(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const _TypeChip(label: 'Pagos', tone: _ChipTone.payment),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Medios de pago',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Eliminar bloque',
+                onPressed: onRemove,
+                icon: const Icon(Icons.delete_outline_rounded),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Se listan los medios activos de Configuración.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+            ),
+          ),
+          const SizedBox(height: 12),
+          methodsAsync.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
+            error: (_, _) => Text(
+              'No se pudieron cargar los medios de pago.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            ),
+            data: (methods) {
+              if (methods.isEmpty) {
+                return Text(
+                  'Aún no hay medios de pago. Agrégalos en Configuración.',
+                  style: theme.textTheme.bodyMedium,
+                );
+              }
+              return Column(
+                children: [
+                  for (final method in methods) ...[
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          switch (PaymentMethodType.fromCode(method.type)) {
+                            PaymentMethodType.yape => Icons.qr_code_2_rounded,
+                            PaymentMethodType.plin => Icons.bolt_rounded,
+                            PaymentMethodType.bankAccount =>
+                              Icons.account_balance_outlined,
+                          },
+                          size: 20,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                method.name,
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                _paymentSubtitle(method),
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSurface
+                                      .withValues(alpha: 0.65),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (method != methods.last) const SizedBox(height: 10),
+                  ],
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _paymentSubtitle(PaymentMethod method) {
+    final type = PaymentMethodType.fromCode(method.type);
+    final extra = switch (type) {
+      PaymentMethodType.yape || PaymentMethodType.plin =>
+        method.phone ?? 'Sin teléfono',
+      PaymentMethodType.bankAccount => [
+          if (method.accountNumber != null)
+            'Cuenta ${method.accountNumber}',
+          if (method.interbankNumber != null)
+            'CCI ${method.interbankNumber}',
+        ].join(' · '),
+    };
+    return '${type.label}${extra.isEmpty ? '' : ' · $extra'}';
   }
 }
 
@@ -93,7 +792,7 @@ class _TableBlock extends StatelessWidget {
 
   final ProformaTableBlock table;
   final MeasureUnit defaultUnit;
-  final ValueChanged<ProformaTableBlock> onChanged;
+  final ValueChanged<ProformaBlock> onChanged;
   final VoidCallback onRemove;
 
   void _updateSection(ProformaSection section) {
@@ -124,29 +823,21 @@ class _TableBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final title =
+        table.name.trim().isEmpty ? 'Sin nombre' : table.name.trim();
 
     return AcrylicSurface(
       padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              const _TypeChip(label: 'Tabla', tone: _ChipTone.table),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  table.name.trim().isEmpty
-                      ? 'Sin nombre'
-                      : table.name.trim(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
-                  ),
-                ),
-              ),
+      child: _CollapseHost(
+        key: ValueKey('table_${table.id}'),
+        initiallyExpanded: true,
+        headerBuilder: (context, expanded, toggle) {
+          return _BlockHeader(
+            chip: const _TypeChip(label: 'Tabla', tone: _ChipTone.table),
+            title: title,
+            expanded: expanded,
+            onToggle: toggle,
+            trailing: [
               _AddMenuButton(
                 tooltip: 'Agregar en tabla',
                 items: const [
@@ -164,32 +855,40 @@ class _TableBlock extends StatelessWidget {
                 icon: const Icon(Icons.delete_outline_rounded),
               ),
             ],
-          ),
-          const SizedBox(height: 10),
-          _BoundField(
-            key: ValueKey('table_name_${table.id}'),
-            label: 'Nombre de la tabla',
-            initialValue: table.name,
-            onChanged: (value) => onChanged(table.copyWith(name: value)),
-          ),
-          const SizedBox(height: 14),
-          for (final section in table.sections) ...[
-            _SectionBlock(
-              section: section,
-              defaultUnit: defaultUnit,
-              onChanged: _updateSection,
-              onRemove: () => _removeSection(section.id),
-            ),
-            const SizedBox(height: 12),
-          ],
-          if (table.sections.isEmpty)
-            Text(
-              'Agrega una sección con el botón +',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+          );
+        },
+        body: Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _BoundField(
+                key: ValueKey('table_name_${table.id}'),
+                label: 'Nombre de la tabla',
+                initialValue: table.name,
+                onChanged: (value) => onChanged(table.copyWith(name: value)),
               ),
-            ),
-        ],
+              const SizedBox(height: 14),
+              for (final section in table.sections) ...[
+                _SectionBlock(
+                  section: section,
+                  defaultUnit: defaultUnit,
+                  onChanged: _updateSection,
+                  onRemove: () => _removeSection(section.id),
+                ),
+                const SizedBox(height: 12),
+              ],
+              if (table.sections.isEmpty)
+                Text(
+                  'Agrega una sección con el botón +',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color:
+                        theme.colorScheme.onSurface.withValues(alpha: 0.55),
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -929,7 +1628,17 @@ class _FinanceRow extends StatelessWidget {
   }
 }
 
-enum _ChipTone { table, section, subsection, item, sum, discount }
+enum _ChipTone {
+  table,
+  section,
+  subsection,
+  item,
+  sum,
+  discount,
+  text,
+  profile,
+  payment,
+}
 
 class _TypeChip extends StatelessWidget {
   const _TypeChip({required this.label, required this.tone});
@@ -947,6 +1656,9 @@ class _TypeChip extends StatelessWidget {
       _ChipTone.item => colorScheme.outline,
       _ChipTone.sum => colorScheme.primary,
       _ChipTone.discount => colorScheme.error,
+      _ChipTone.text => colorScheme.secondary,
+      _ChipTone.profile => colorScheme.tertiary,
+      _ChipTone.payment => colorScheme.primary,
     };
 
     return Text(
@@ -1014,6 +1726,7 @@ class _BlockHeader extends StatelessWidget {
 
 class _CollapseHost extends StatefulWidget {
   const _CollapseHost({
+    super.key,
     required this.initiallyExpanded,
     required this.headerBuilder,
     required this.body,
