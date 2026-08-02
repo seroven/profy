@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../app/theme/app_motion.dart';
 import '../../../shared/widgets/acrylic_surface.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/app_confirm_dialog.dart';
 import '../../settings/models/measure_unit.dart';
 import '../../settings/models/payment_method_type.dart';
 import '../../../core/database/app_database.dart';
@@ -20,6 +21,23 @@ typedef ProformaDocumentChanged = void Function(ProformaDocument document);
 
 /// Paso horizontal único entre niveles (sección → subsección → fila).
 const double _indentStep = 16;
+
+Future<void> _confirmDelete(
+  BuildContext context, {
+  required String title,
+  required String description,
+  required VoidCallback onConfirm,
+}) {
+  return AppConfirmDialog.show(
+    context,
+    title: title,
+    description: description,
+    confirmLabel: 'Eliminar',
+    cancelLabel: 'Cancelar',
+    destructive: true,
+    onConfirm: onConfirm,
+  );
+}
 
 /// Builder de documento: tablas, texto, perfil y medios de pago.
 class ProformaTableBuilder extends StatelessWidget {
@@ -53,6 +71,13 @@ class ProformaTableBuilder extends StatelessWidget {
 
   void _addBlock(ProformaBlock block) {
     _emit([..._blocks, block]);
+  }
+
+  void _reorderBlocks(int oldIndex, int newIndex) {
+    final blocks = _blocks;
+    final moved = blocks.removeAt(oldIndex);
+    blocks.insert(newIndex, moved);
+    _emit(blocks);
   }
 
   List<_AddAction> _documentActions() {
@@ -100,7 +125,9 @@ class ProformaTableBuilder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final actions = _documentActions();
+    final blocks = _blocks;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -108,52 +135,102 @@ class ProformaTableBuilder extends StatelessWidget {
         Text('Documento', style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
         Text(
-          'Agrega tablas, textos, perfil o medios de pago al documento.',
+          blocks.length > 1
+              ? 'Usa ≡ junto a eliminar para reordenar bloques.'
+              : 'Agrega tablas, textos, perfil o medios de pago al documento.',
           style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
+            color: colorScheme.onSurface.withValues(alpha: 0.65),
           ),
         ),
         const SizedBox(height: 14),
-        for (final block in _blocks) ...[
-          switch (block) {
-            final ProformaTableBlock table => _TableBlock(
-                table: table,
-                defaultUnit: defaultUnit,
-                onChanged: _replaceBlock,
-                onRemove: () => _removeBlock(table.id),
-              ),
-            final ProformaTextBlock text => _TextBlockEditor(
-                block: text,
-                onChanged: _replaceBlock,
-                onRemove: () => _removeBlock(text.id),
-              ),
-            final ProformaProfileBlock profile => _ProfileBlockPreview(
-                onRemove: () => _removeBlock(profile.id),
-              ),
-            final ProformaPaymentMethodsBlock payment =>
-              _PaymentMethodsBlockPreview(
-                onRemove: () => _removeBlock(payment.id),
-              ),
-          },
-          const SizedBox(height: 14),
-        ],
-        if (_blocks.isEmpty)
+        if (blocks.isEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Text(
               'El documento está vacío. Agrega el primer bloque.',
               style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+                color: colorScheme.onSurface.withValues(alpha: 0.55),
               ),
             ),
+          )
+        else
+          ReorderableListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            buildDefaultDragHandles: false,
+            itemCount: blocks.length,
+            onReorderItem: _reorderBlocks,
+            onReorderStart: (_) => HapticFeedback.selectionClick(),
+            proxyDecorator: (child, index, animation) {
+              return AnimatedBuilder(
+                animation: animation,
+                builder: (context, _) {
+                  final t = Curves.easeOut.transform(animation.value);
+                  return Material(
+                    color: Colors.transparent,
+                    elevation: 2 + 4 * t,
+                    shadowColor: colorScheme.shadow.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(16),
+                    child: child,
+                  );
+                },
+              );
+            },
+            itemBuilder: (context, index) {
+              final block = blocks[index];
+              final reorderHandle = ReorderableDragStartListener(
+                index: index,
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Icon(
+                    Icons.drag_handle_rounded,
+                    color: colorScheme.onSurface.withValues(alpha: 0.45),
+                  ),
+                ),
+              );
+              return Padding(
+                key: ValueKey(block.id),
+                padding: EdgeInsets.only(
+                  bottom: index == blocks.length - 1 ? 0 : 14,
+                ),
+                child: _blockEditor(block, reorderHandle: reorderHandle),
+              );
+            },
           ),
+        const SizedBox(height: 14),
         AppButton(
-          label: _blocks.isEmpty ? 'Agregar bloque' : 'Agregar otro bloque',
+          label: blocks.isEmpty ? 'Agregar bloque' : 'Agregar otro bloque',
           icon: Icons.add_rounded,
           onPressed: () => _openDocumentMenu(context, actions),
         ),
       ],
     );
+  }
+
+  Widget _blockEditor(ProformaBlock block, {required Widget reorderHandle}) {
+    return switch (block) {
+      final ProformaTableBlock table => _TableBlock(
+          table: table,
+          defaultUnit: defaultUnit,
+          reorderHandle: reorderHandle,
+          onChanged: _replaceBlock,
+          onRemove: () => _removeBlock(table.id),
+        ),
+      final ProformaTextBlock text => _TextBlockEditor(
+          block: text,
+          reorderHandle: reorderHandle,
+          onChanged: _replaceBlock,
+          onRemove: () => _removeBlock(text.id),
+        ),
+      final ProformaProfileBlock profile => _ProfileBlockPreview(
+          reorderHandle: reorderHandle,
+          onRemove: () => _removeBlock(profile.id),
+        ),
+      final ProformaPaymentMethodsBlock payment => _PaymentMethodsBlockPreview(
+          reorderHandle: reorderHandle,
+          onRemove: () => _removeBlock(payment.id),
+        ),
+    };
   }
 
   Future<void> _openDocumentMenu(
@@ -188,11 +265,13 @@ class _TextBlockEditor extends ConsumerStatefulWidget {
     required this.block,
     required this.onChanged,
     required this.onRemove,
+    required this.reorderHandle,
   });
 
   final ProformaTextBlock block;
   final ValueChanged<ProformaBlock> onChanged;
   final VoidCallback onRemove;
+  final Widget reorderHandle;
 
   @override
   ConsumerState<_TextBlockEditor> createState() => _TextBlockEditorState();
@@ -374,9 +453,16 @@ class _TextBlockEditorState extends ConsumerState<_TextBlockEditor> {
                   ),
                 ),
               ),
+              widget.reorderHandle,
               IconButton(
                 tooltip: 'Eliminar texto',
-                onPressed: widget.onRemove,
+                onPressed: () => _confirmDelete(
+                  context,
+                  title: 'Eliminar texto',
+                  description:
+                      'Se eliminará este bloque de texto y sus imágenes.',
+                  onConfirm: widget.onRemove,
+                ),
                 icon: const Icon(Icons.delete_outline_rounded),
               ),
             ],
@@ -475,7 +561,13 @@ class _TextBlockEditorState extends ConsumerState<_TextBlockEditor> {
                         right: -8,
                         child: IconButton.filledTonal(
                           visualDensity: VisualDensity.compact,
-                          onPressed: () => _removeImage(path),
+                          onPressed: () => _confirmDelete(
+                            context,
+                            title: 'Eliminar imagen',
+                            description:
+                                'Se quitará esta imagen del bloque de texto.',
+                            onConfirm: () => _removeImage(path),
+                          ),
                           icon: const Icon(Icons.close_rounded, size: 16),
                         ),
                       ),
@@ -540,9 +632,13 @@ class _MarkdownBulletInputFormatter extends TextInputFormatter {
 }
 
 class _ProfileBlockPreview extends ConsumerWidget {
-  const _ProfileBlockPreview({required this.onRemove});
+  const _ProfileBlockPreview({
+    required this.onRemove,
+    required this.reorderHandle,
+  });
 
   final VoidCallback onRemove;
+  final Widget reorderHandle;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -567,9 +663,16 @@ class _ProfileBlockPreview extends ConsumerWidget {
                   ),
                 ),
               ),
+              reorderHandle,
               IconButton(
                 tooltip: 'Eliminar bloque',
-                onPressed: onRemove,
+                onPressed: () => _confirmDelete(
+                  context,
+                  title: 'Eliminar perfil',
+                  description:
+                      'Se quitará el bloque de perfil del documento. Tus datos en Configuración no se borran.',
+                  onConfirm: onRemove,
+                ),
                 icon: const Icon(Icons.delete_outline_rounded),
               ),
             ],
@@ -657,9 +760,13 @@ class _ProfileBlockPreview extends ConsumerWidget {
 }
 
 class _PaymentMethodsBlockPreview extends ConsumerWidget {
-  const _PaymentMethodsBlockPreview({required this.onRemove});
+  const _PaymentMethodsBlockPreview({
+    required this.onRemove,
+    required this.reorderHandle,
+  });
 
   final VoidCallback onRemove;
+  final Widget reorderHandle;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -684,9 +791,16 @@ class _PaymentMethodsBlockPreview extends ConsumerWidget {
                   ),
                 ),
               ),
+              reorderHandle,
               IconButton(
                 tooltip: 'Eliminar bloque',
-                onPressed: onRemove,
+                onPressed: () => _confirmDelete(
+                  context,
+                  title: 'Eliminar medios de pago',
+                  description:
+                      'Se quitará este bloque del documento. Tus medios en Configuración no se borran.',
+                  onConfirm: onRemove,
+                ),
                 icon: const Icon(Icons.delete_outline_rounded),
               ),
             ],
@@ -788,12 +902,14 @@ class _TableBlock extends StatelessWidget {
     required this.defaultUnit,
     required this.onChanged,
     required this.onRemove,
+    required this.reorderHandle,
   });
 
   final ProformaTableBlock table;
   final MeasureUnit defaultUnit;
   final ValueChanged<ProformaBlock> onChanged;
   final VoidCallback onRemove;
+  final Widget reorderHandle;
 
   void _updateSection(ProformaSection section) {
     onChanged(
@@ -849,9 +965,16 @@ class _TableBlock extends StatelessWidget {
                 ],
                 onSelected: (_) => _addSection(),
               ),
+              reorderHandle,
               IconButton(
                 tooltip: 'Eliminar tabla',
-                onPressed: onRemove,
+                onPressed: () => _confirmDelete(
+                  context,
+                  title: 'Eliminar tabla',
+                  description:
+                      'Se eliminará la tabla y todo su contenido (secciones, ítems, sumas y descuentos).',
+                  onConfirm: onRemove,
+                ),
                 icon: const Icon(Icons.delete_outline_rounded),
               ),
             ],
@@ -1087,7 +1210,13 @@ class _SectionBlock extends StatelessWidget {
               ),
             IconButton(
               tooltip: 'Eliminar sección',
-              onPressed: onRemove,
+              onPressed: () => _confirmDelete(
+                context,
+                title: 'Eliminar sección',
+                description:
+                    'Se eliminará la sección y todo su contenido interno.',
+                onConfirm: onRemove,
+              ),
               icon: const Icon(Icons.close_rounded),
             ),
           ],
@@ -1296,7 +1425,13 @@ class _SubsectionBlock extends StatelessWidget {
               ),
               IconButton(
                 tooltip: 'Eliminar subsección',
-                onPressed: onRemove,
+                onPressed: () => _confirmDelete(
+                  context,
+                  title: 'Eliminar subsección',
+                  description:
+                      'Se eliminará la subsección y sus ítems, sumas o descuentos.',
+                  onConfirm: onRemove,
+                ),
                 icon: const Icon(Icons.close_rounded),
               ),
             ],
@@ -1437,7 +1572,12 @@ class _ItemRow extends StatelessWidget {
               ),
               IconButton(
                 tooltip: 'Eliminar ítem',
-                onPressed: onRemove,
+                onPressed: () => _confirmDelete(
+                  context,
+                  title: 'Eliminar ítem',
+                  description: 'Se eliminará este ítem de la lista.',
+                  onConfirm: onRemove,
+                ),
                 icon: const Icon(Icons.close_rounded, size: 20),
               ),
             ],
@@ -1568,7 +1708,12 @@ class _FinanceRow extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  onPressed: onRemove,
+                  onPressed: () => _confirmDelete(
+                    context,
+                    title: 'Eliminar suma',
+                    description: 'Se eliminará esta fila de suma.',
+                    onConfirm: onRemove,
+                  ),
                   icon: const Icon(Icons.close_rounded, size: 20),
                 ),
               ],
@@ -1611,7 +1756,12 @@ class _FinanceRow extends StatelessWidget {
                 ),
               ),
               IconButton(
-                onPressed: onRemove,
+                onPressed: () => _confirmDelete(
+                  context,
+                  title: 'Eliminar descuento',
+                  description: 'Se eliminará esta fila de descuento.',
+                  onConfirm: onRemove,
+                ),
                 icon: const Icon(Icons.close_rounded, size: 20),
               ),
             ],
