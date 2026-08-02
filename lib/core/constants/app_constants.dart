@@ -7,7 +7,7 @@ abstract final class AppConstants {
   static const Duration sessionInactivityTimeout = Duration(hours: 2);
 
   /// Duración mínima percibida en lecturas/escrituras a base de datos.
-  static const Duration minDbActionDuration = Duration(seconds: 2);
+  static const Duration minDbActionDuration = Duration(milliseconds: 1500);
 
   static const int minUsernameLength = 3;
   static const int minPasswordLength = 6;
