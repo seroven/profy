@@ -6,6 +6,7 @@ import '../features/auth/providers/auth_provider.dart';
 import '../features/auth/screens/auth_screen.dart';
 import '../features/payments/screens/comprobante_screen.dart';
 import '../features/proformas/screens/proforma_editor_screen.dart';
+import '../features/proformas/screens/proforma_pdf_preview_screen.dart';
 import '../features/proformas/screens/proforma_screen.dart';
 import '../features/settings/screens/configuracion_screen.dart';
 import '../features/settings/screens/edit_company_logo_screen.dart';
@@ -98,6 +99,21 @@ final routerProvider = Provider<GoRouter>((ref) {
                     child: ProformaEditorScreen(proformaId: id),
                   );
                 },
+                routes: [
+                  GoRoute(
+                    path: 'pdf',
+                    name: ProformaPdfPreviewScreen.routeName,
+                    pageBuilder: (context, state) {
+                      final id =
+                          int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+                      return buildTabSlidePage(
+                        key: state.pageKey,
+                        forward: true,
+                        child: ProformaPdfPreviewScreen(proformaId: id),
+                      );
+                    },
+                  ),
+                ],
               ),
             ],
           ),

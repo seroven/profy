@@ -225,28 +225,11 @@ class _ProformaEditorScreenState extends ConsumerState<ProformaEditorScreen> {
     }
   }
 
-  Future<void> _exportPdf() async {
+  void _exportPdf() {
     if (!_hydrated || _actionBusy || _status != ProformaStatus.finished) {
       return;
     }
-
-    setState(() => _actionBusy = true);
-    try {
-      final proforma = await ref
-          .read(proformaServiceProvider)
-          .getById(widget.proformaId);
-      if (proforma == null) {
-        throw StateError('Proforma no encontrada');
-      }
-      await ref.read(proformaPdfServiceProvider).preview(proforma);
-    } catch (error, stackTrace) {
-      debugPrint('PDF export failed: $error\n$stackTrace');
-      if (mounted) {
-        AppToast.error(context, 'No se pudo generar el PDF');
-      }
-    } finally {
-      if (mounted) setState(() => _actionBusy = false);
-    }
+    context.push('/proformas/${widget.proformaId}/pdf');
   }
 
   Future<void> _pickDate() async {

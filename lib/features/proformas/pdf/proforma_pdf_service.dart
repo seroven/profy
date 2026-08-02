@@ -1,7 +1,5 @@
 import 'dart:typed_data';
 
-import 'package:printing/printing.dart';
-
 import '../../../core/database/app_database.dart';
 import '../../settings/services/payment_methods_service.dart';
 import '../../settings/services/user_detail_service.dart';
@@ -11,7 +9,7 @@ import '../models/proforma_status.dart';
 import 'proforma_pdf_builder.dart';
 import 'proforma_pdf_context.dart';
 
-/// Orquesta datos de settings + generación + vista previa del PDF.
+/// Orquesta datos de settings + generación del PDF.
 class ProformaPdfService {
   ProformaPdfService({
     required this.preferencesService,
@@ -45,14 +43,5 @@ class ProformaPdfService {
     );
 
     return _builder.build(context);
-  }
-
-  /// Genera el PDF y abre la vista previa del sistema (compartir/guardar/imprimir).
-  Future<void> preview(Proforma proforma) async {
-    final bytes = await buildBytes(proforma);
-    await Printing.layoutPdf(
-      name: proforma.code,
-      onLayout: (_) async => bytes,
-    );
   }
 }
