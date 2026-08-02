@@ -394,21 +394,25 @@ class _TextBlockEditorState extends ConsumerState<_TextBlockEditor> {
     if (_picking) return;
     setState(() => _picking = true);
     try {
-      final file = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
+      final files = await ImagePicker().pickMultiImage(
         maxWidth: 1600,
         imageQuality: 85,
       );
-      if (file == null) return;
+      if (files.isEmpty) return;
       final storage = ref.read(localImageStorageProvider);
-      final path = await storage.saveImage(
-        source: File(file.path),
-        folder: 'proforma_text',
-        fileName: '${widget.block.id}_${DateTime.now().millisecondsSinceEpoch}',
-      );
+      final stamp = DateTime.now().millisecondsSinceEpoch;
+      final saved = <String>[];
+      for (var i = 0; i < files.length; i++) {
+        final path = await storage.saveImage(
+          source: File(files[i].path),
+          folder: 'proforma_text',
+          fileName: '${widget.block.id}_${stamp}_$i',
+        );
+        saved.add(path);
+      }
       widget.onChanged(
         widget.block.copyWith(
-          imagePaths: [...widget.block.imagePaths, path],
+          imagePaths: [...widget.block.imagePaths, ...saved],
         ),
       );
     } finally {
@@ -586,7 +590,7 @@ class _TextBlockEditorState extends ConsumerState<_TextBlockEditor> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.add_photo_alternate_outlined),
-            label: Text(_picking ? 'Agregando…' : 'Agregar imagen'),
+            label: Text(_picking ? 'Agregando…' : 'Agregar imágenes'),
           ),
         ],
       ),

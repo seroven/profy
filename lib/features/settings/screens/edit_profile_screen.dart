@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/app_loading_panel.dart';
 import '../../../shared/widgets/app_text_field.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../providers/settings_providers.dart';
@@ -121,89 +122,102 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final detailAsync = ref.watch(userDetailProvider);
     ref.listen(userDetailProvider, (previous, next) => _hydrate());
     _hydrate();
 
+    final showLoader = detailAsync.isLoading || !_loaded;
+
     return SettingsSubpageScaffold(
       title: 'Datos personales',
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-        children: [
-          Center(
-            child: Column(
+      child: showLoader
+          ? const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                child: AppLoadingPanel(message: 'Cargando perfil…'),
+              ),
+            )
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
               children: [
-                CircleAvatar(
-                  radius: 46,
-                  backgroundColor:
-                      Theme.of(context).colorScheme.primary.withValues(alpha: 0.25),
-                  backgroundImage:
-                      _photoPath != null ? FileImage(File(_photoPath!)) : null,
-                  child: _photoPath == null
-                      ? const Icon(Icons.person_rounded, size: 42)
-                      : null,
+                Center(
+                  child: Column(
+                    children: [
+                      CircleAvatar(
+                        radius: 46,
+                        backgroundColor: Theme.of(context)
+                            .colorScheme
+                            .primary
+                            .withValues(alpha: 0.25),
+                        backgroundImage: _photoPath != null
+                            ? FileImage(File(_photoPath!))
+                            : null,
+                        child: _photoPath == null
+                            ? const Icon(Icons.person_rounded, size: 42)
+                            : null,
+                      ),
+                      const SizedBox(height: 10),
+                      TextButton(
+                        onPressed: _saving ? null : _pickPhoto,
+                        child: const Text('Cambiar foto'),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 10),
-                TextButton(
-                  onPressed: _saving ? null : _pickPhoto,
-                  child: const Text('Cambiar foto'),
+                const SizedBox(height: 12),
+                AppTextField(
+                  controller: _firstNameController,
+                  label: 'Nombres',
+                  textInputAction: TextInputAction.next,
+                  enabled: !_saving,
+                ),
+                const SizedBox(height: 14),
+                AppTextField(
+                  controller: _lastNameController,
+                  label: 'Apellidos',
+                  textInputAction: TextInputAction.next,
+                  enabled: !_saving,
+                ),
+                const SizedBox(height: 14),
+                AppTextField(
+                  controller: _phoneController,
+                  label: 'Teléfono',
+                  keyboardType: TextInputType.phone,
+                  textInputAction: TextInputAction.next,
+                  enabled: !_saving,
+                ),
+                const SizedBox(height: 14),
+                AppTextField(
+                  controller: _dniController,
+                  label: 'DNI',
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.next,
+                  enabled: !_saving,
+                ),
+                const SizedBox(height: 14),
+                AppTextField(
+                  controller: _rucController,
+                  label: 'RUC',
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.next,
+                  enabled: !_saving,
+                ),
+                const SizedBox(height: 14),
+                AppTextField(
+                  controller: _emailController,
+                  label: 'Email',
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.done,
+                  enabled: !_saving,
+                ),
+                const SizedBox(height: 24),
+                AppButton(
+                  label: 'Guardar',
+                  isLoading: _saving,
+                  onPressed: _saving ? null : _save,
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: 12),
-          AppTextField(
-            controller: _firstNameController,
-            label: 'Nombres',
-            textInputAction: TextInputAction.next,
-            enabled: !_saving,
-          ),
-          const SizedBox(height: 14),
-          AppTextField(
-            controller: _lastNameController,
-            label: 'Apellidos',
-            textInputAction: TextInputAction.next,
-            enabled: !_saving,
-          ),
-          const SizedBox(height: 14),
-          AppTextField(
-            controller: _phoneController,
-            label: 'Teléfono',
-            keyboardType: TextInputType.phone,
-            textInputAction: TextInputAction.next,
-            enabled: !_saving,
-          ),
-          const SizedBox(height: 14),
-          AppTextField(
-            controller: _dniController,
-            label: 'DNI',
-            keyboardType: TextInputType.number,
-            textInputAction: TextInputAction.next,
-            enabled: !_saving,
-          ),
-          const SizedBox(height: 14),
-          AppTextField(
-            controller: _rucController,
-            label: 'RUC',
-            keyboardType: TextInputType.number,
-            textInputAction: TextInputAction.next,
-            enabled: !_saving,
-          ),
-          const SizedBox(height: 14),
-          AppTextField(
-            controller: _emailController,
-            label: 'Email',
-            keyboardType: TextInputType.emailAddress,
-            textInputAction: TextInputAction.done,
-            enabled: !_saving,
-          ),
-          const SizedBox(height: 24),
-          AppButton(
-            label: 'Guardar',
-            isLoading: _saving,
-            onPressed: _saving ? null : _save,
-          ),
-        ],
-      ),
     );
   }
 }

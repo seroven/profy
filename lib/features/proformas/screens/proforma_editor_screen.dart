@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/database/app_database.dart';
 import '../../../shared/widgets/acrylic_surface.dart';
+import '../../../shared/widgets/app_loading_panel.dart';
 import '../../../shared/widgets/app_text_field.dart';
 import '../../settings/models/app_currency.dart';
 import '../../settings/models/measure_unit.dart';
@@ -333,43 +334,10 @@ class _ProformaEditorScreenState extends ConsumerState<ProformaEditorScreen> {
                   onChanged: _onDocumentChanged,
                 )
               else
-                const _DocumentLoadingPanel(),
+                const AppLoadingPanel(message: 'Cargando documento…'),
             ],
           );
         },
-      ),
-    );
-  }
-}
-
-class _DocumentLoadingPanel extends StatelessWidget {
-  const _DocumentLoadingPanel();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return AcrylicSurface(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 36),
-      child: Column(
-        children: [
-          SizedBox(
-            width: 28,
-            height: 28,
-            child: CircularProgressIndicator(
-              strokeWidth: 2.5,
-              color: colorScheme.primary,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Cargando documento…',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onSurface.withValues(alpha: 0.7),
-            ),
-          ),
-        ],
       ),
     );
   }
