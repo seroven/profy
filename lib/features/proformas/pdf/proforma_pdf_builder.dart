@@ -160,21 +160,17 @@ class ProformaPdfBuilder {
         : context.proforma.projectName.trim();
     final phone = (context.proforma.phone ?? '').trim();
 
-    return pw.Container(
-      decoration: ProformaPdfTheme.cardDecoration,
-      padding: const pw.EdgeInsets.all(ProformaPdfTheme.cardPadding),
-      child: pw.Row(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.Expanded(child: _metaColumn('CLIENTE', client)),
+    return pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Expanded(child: _metaColumn('CLIENTE', client)),
+        pw.SizedBox(width: 12),
+        pw.Expanded(child: _metaColumn('PROYECTO', project)),
+        if (phone.isNotEmpty) ...[
           pw.SizedBox(width: 12),
-          pw.Expanded(child: _metaColumn('PROYECTO', project)),
-          if (phone.isNotEmpty) ...[
-            pw.SizedBox(width: 12),
-            pw.Expanded(child: _metaColumn('TELÉFONO', phone)),
-          ],
+          pw.Expanded(child: _metaColumn('TELÉFONO', phone)),
         ],
-      ),
+      ],
     );
   }
 
@@ -189,19 +185,16 @@ class ProformaPdfBuilder {
     );
   }
 
-  /// Cada bloque puede devolver varios widgets para paginación en MultiPage.
   Future<List<pw.Widget>> _renderBlock(
     ProformaBlock block,
     ProformaPdfContext context,
   ) async {
     return switch (block) {
-      final ProformaTableBlock table => [
-          buildTableBlockPdf(
+      final ProformaTableBlock table => buildTableBlockPdf(
             table,
             moneyPrefix:
                 AppCurrency.fromCode(context.proforma.currency).prefix,
           ),
-        ],
       final ProformaTextBlock text => await buildTextBlockPdf(text),
       final ProformaProfileBlock _ => [
           await buildProfileBlockPdf(context.profile),

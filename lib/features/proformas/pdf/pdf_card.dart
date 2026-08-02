@@ -67,89 +67,19 @@ pw.Widget _fallbackDot(double size, PdfColor color) {
   );
 }
 
-/// Posición de un tramo de card (para paginar sin romper el contorno).
-enum PdfCardSegment { alone, start, middle, end }
-
-/// Tarjeta de bloque con título e icono opcional.
+/// Bloque con título e icono (sin contorno).
 pw.Widget pdfBlockCard({
   required String title,
   required pw.Widget child,
   PdfDrawnIcon? icon,
 }) {
-  return pdfSegmentedCard(
-    segment: PdfCardSegment.alone,
-    title: title,
-    icon: icon,
-    child: child,
-  );
-}
-
-/// Tramo de card: varios widgets top-level que visualmente forman un solo box.
-///
-/// `package:pdf` solo permite `borderRadius` con borde uniforme (`Border.all`).
-/// Por eso start/end usan borde completo + radio parcial; middle solo laterales.
-pw.Widget pdfSegmentedCard({
-  required PdfCardSegment segment,
-  required pw.Widget child,
-  String? title,
-  PdfDrawnIcon? icon,
-}) {
-  final r = ProformaPdfTheme.radius;
-  final side = pw.BorderSide(color: ProformaPdfTheme.line, width: 0.9);
-
-  // Borde no uniforme ⇒ borderRadius debe ser null (assertion en pdf).
-  // start lleva borde inferior (cierra el texto); end no lleva superior
-  // para no dibujar una línea entre filas de imágenes.
-  final pw.BoxBorder border;
-  final pw.BorderRadius? radius;
-
-  switch (segment) {
-    case PdfCardSegment.alone:
-      border = pw.Border.all(color: ProformaPdfTheme.line, width: 0.9);
-      radius = pw.BorderRadius.circular(r);
-    case PdfCardSegment.start:
-      border = pw.Border.all(color: ProformaPdfTheme.line, width: 0.9);
-      radius = pw.BorderRadius.only(
-        topLeft: pw.Radius.circular(r),
-        topRight: pw.Radius.circular(r),
-      );
-    case PdfCardSegment.middle:
-      border = pw.Border(left: side, right: side);
-      radius = null;
-    case PdfCardSegment.end:
-      border = pw.Border(left: side, right: side, bottom: side);
-      radius = null;
-  }
-
-  final padding = switch (segment) {
-    PdfCardSegment.alone || PdfCardSegment.start =>
-      const pw.EdgeInsets.all(ProformaPdfTheme.cardPadding),
-    PdfCardSegment.middle => const pw.EdgeInsets.fromLTRB(
-        ProformaPdfTheme.cardPadding,
-        4,
-        ProformaPdfTheme.cardPadding,
-        4,
-      ),
-    PdfCardSegment.end => const pw.EdgeInsets.all(ProformaPdfTheme.cardPadding),
-  };
-
-  return pw.Container(
-    decoration: pw.BoxDecoration(
-      color: ProformaPdfTheme.white,
-      border: border,
-      borderRadius: radius,
-    ),
-    padding: padding,
-    child: pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-      children: [
-        if (title != null) ...[
-          pdfBlockTitle(title, icon: icon),
-          pw.SizedBox(height: 10),
-        ],
-        child,
-      ],
-    ),
+  return pw.Column(
+    crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+    children: [
+      pdfBlockTitle(title, icon: icon),
+      pw.SizedBox(height: 10),
+      child,
+    ],
   );
 }
 

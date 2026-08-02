@@ -7,11 +7,10 @@ import '../../models/proforma_document.dart';
 import '../pdf_card.dart';
 import '../proforma_pdf_theme.dart';
 
-/// Ancho útil aproximado del contenido dentro de la card A4.
+/// Ancho útil aproximado del contenido A4.
 const double _contentWidth = 480;
 
-/// Bloque de texto: tramos de una misma card (texto + filas de imágenes)
-/// para que `MultiPage` pagine sin sacar las fotos del contorno.
+/// Bloque de texto: un solo widget (sin partir para paginación).
 Future<List<pw.Widget>> buildTextBlockPdf(ProformaTextBlock block) async {
   final title = (block.title ?? '').trim();
   final heading = title.isEmpty ? 'Texto' : title;
@@ -24,47 +23,34 @@ Future<List<pw.Widget>> buildTextBlockPdf(ProformaTextBlock block) async {
     }
   }
 
-  final textChild = block.content.trim().isNotEmpty
-      ? pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-          children: _contentParagraphs(block.content),
-        )
-      : pw.Text('Sin contenido.', style: ProformaPdfTheme.caption());
-
-  if (images.isEmpty) {
-    return [
-      pdfBlockCard(
-        title: heading,
-        icon: PdfDrawnIcon.text,
-        child: textChild,
-      ),
-    ];
-  }
-
-  final rows = _mosaicRows(images);
-  final widgets = <pw.Widget>[
-    pdfSegmentedCard(
-      segment: PdfCardSegment.start,
-      title: heading,
-      icon: PdfDrawnIcon.text,
-      child: textChild,
-    ),
+  final children = <pw.Widget>[
+    if (block.content.trim().isNotEmpty)
+      ..._contentParagraphs(block.content)
+    else
+      pw.Text('Sin contenido.', style: ProformaPdfTheme.caption()),
   ];
 
-  for (var i = 0; i < rows.length; i++) {
-    final isLast = i == rows.length - 1;
-    widgets.add(
-      pdfSegmentedCard(
-        segment: isLast ? PdfCardSegment.end : PdfCardSegment.middle,
-        child: rows[i],
-      ),
-    );
+  if (images.isNotEmpty) {
+    children.add(pw.SizedBox(height: 8));
+    final rows = _mosaicRows(images);
+    for (var i = 0; i < rows.length; i++) {
+      children.add(rows[i]);
+      if (i < rows.length - 1) children.add(pw.SizedBox(height: 8));
+    }
   }
 
-  return widgets;
+  return [
+    pdfBlockCard(
+      title: heading,
+      icon: PdfDrawnIcon.text,
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+        children: children,
+      ),
+    ),
+  ];
 }
 
-/// Filas de mosaico independientes (cada una puede saltar de página).
 List<pw.Widget> _mosaicRows(List<pw.MemoryImage> images) {
   const gap = 8.0;
   const maxTileHeight = 170.0;

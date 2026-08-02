@@ -20,8 +20,9 @@ const double _sectionFinanceGap = 10;
 
 enum _FinanceTone { nested, section, table }
 
-/// Bloque tabla con grid completo y secciones en contorno.
-pw.Widget buildTableBlockPdf(
+/// Bloque tabla como un solo widget: sin cortes artificiales ni contorno exterior.
+/// Conserva espaciado y sombreado para distinguir sección / subsección / tabla.
+List<pw.Widget> buildTableBlockPdf(
   ProformaTableBlock table, {
   required String moneyPrefix,
 }) {
@@ -33,30 +34,39 @@ pw.Widget buildTableBlockPdf(
     tone: _FinanceTone.table,
   );
 
-  return pdfBlockCard(
-    title: title,
-    icon: PdfDrawnIcon.table,
-    child: table.sections.isEmpty && tableFinance.isEmpty
-        ? pw.Text('Sin secciones.', style: ProformaPdfTheme.caption())
-        : pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-            children: [
-              for (var i = 0; i < table.sections.length; i++) ...[
-                _sectionBox(table.sections[i], moneyPrefix: moneyPrefix),
-                if (i < table.sections.length - 1)
-                  pw.SizedBox(height: _sectionGap),
-              ],
-              if (tableFinance.isNotEmpty) ...[
-                if (table.sections.isNotEmpty)
-                  pw.SizedBox(height: _sectionGap),
-                _financeOnlyGrid(tableFinance),
-              ],
-            ],
-          ),
-  );
+  if (table.sections.isEmpty && tableFinance.isEmpty) {
+    return [
+      pdfBlockCard(
+        title: title,
+        icon: PdfDrawnIcon.table,
+        child: pw.Text('Sin secciones.', style: ProformaPdfTheme.caption()),
+      ),
+    ];
+  }
+
+  final body = <pw.Widget>[];
+  for (var i = 0; i < table.sections.length; i++) {
+    if (i > 0) body.add(pw.SizedBox(height: _sectionGap));
+    body.addAll(_sectionContent(table.sections[i], moneyPrefix: moneyPrefix));
+  }
+  if (tableFinance.isNotEmpty) {
+    if (table.sections.isNotEmpty) body.add(pw.SizedBox(height: _sectionGap));
+    body.add(_financeOnlyGrid(tableFinance));
+  }
+
+  return [
+    pdfBlockCard(
+      title: title,
+      icon: PdfDrawnIcon.table,
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+        children: body,
+      ),
+    ),
+  ];
 }
 
-pw.Widget _sectionBox(
+List<pw.Widget> _sectionContent(
   ProformaSection section, {
   required String moneyPrefix,
 }) {
@@ -64,7 +74,7 @@ pw.Widget _sectionBox(
       ? 'Sección'
       : section.description.trim();
 
-  final body = <pw.Widget>[
+  final out = <pw.Widget>[
     _fullBanner(sectionTitle, ProformaPdfTheme.sectionBg),
   ];
 
@@ -75,12 +85,9 @@ pw.Widget _sectionBox(
           ? 'Subsección'
           : sub.description.trim();
 
-      if (i > 0) {
-        body.add(pw.SizedBox(height: _subsectionGap));
-      }
-
-      body.add(_fullBanner(subTitle, ProformaPdfTheme.subsectionBg));
-      body.add(
+      if (i > 0) out.add(pw.SizedBox(height: _subsectionGap));
+      out.add(_fullBanner(subTitle, ProformaPdfTheme.subsectionBg));
+      out.add(
         _dataGrid(
           items: sub.rows.whereType<ProformaItemRow>().toList(),
           finance: _financeRows(
@@ -102,11 +109,11 @@ pw.Widget _sectionBox(
       tone: _FinanceTone.section,
     );
     if (sectionFinance.isNotEmpty) {
-      body.add(pw.SizedBox(height: _sectionFinanceGap));
-      body.add(_financeOnlyGrid(sectionFinance));
+      out.add(pw.SizedBox(height: _sectionFinanceGap));
+      out.add(_financeOnlyGrid(sectionFinance));
     }
   } else {
-    body.add(
+    out.add(
       _dataGrid(
         items: section.rows.whereType<ProformaItemRow>().toList(),
         finance: _financeRows(
@@ -120,17 +127,7 @@ pw.Widget _sectionBox(
     );
   }
 
-  return pw.Container(
-    decoration: pw.BoxDecoration(
-      border: pw.Border.all(color: ProformaPdfTheme.line, width: 0.9),
-      borderRadius: pw.BorderRadius.circular(6),
-      color: ProformaPdfTheme.white,
-    ),
-    child: pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
-      children: body,
-    ),
-  );
+  return out;
 }
 
 pw.Widget _fullBanner(String text, PdfColor background) {
