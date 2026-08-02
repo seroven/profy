@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/database/app_database.dart';
 import '../../../shared/widgets/acrylic_surface.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../../shared/widgets/app_confirm_dialog.dart';
@@ -10,6 +11,7 @@ import '../../../shared/widgets/app_toast.dart';
 import '../../settings/providers/settings_providers.dart';
 import '../models/proforma_status.dart';
 import '../providers/proforma_providers.dart';
+import '../widgets/proforma_status_chip.dart';
 import 'proforma_editor_screen.dart';
 
 class ProformaScreen extends ConsumerStatefulWidget {
@@ -53,7 +55,8 @@ class _ProformaScreenState extends ConsumerState<ProformaScreen> {
     final confirmed = await AppConfirmDialog.show(
       context,
       title: 'Eliminar proforma',
-      description: 'Se eliminará esta proforma. Esta acción no se puede deshacer.',
+      description:
+          'Se eliminará esta proforma. Esta acción no se puede deshacer.',
       confirmLabel: 'Eliminar',
       cancelLabel: 'Cancelar',
       destructive: true,
@@ -155,43 +158,125 @@ class _ProformaScreenState extends ConsumerState<ProformaScreen> {
                             ),
                           )
                         else
-                          ...items.map((item) {
-                            final status =
-                                ProformaStatus.fromCode(item.status);
-                            final title = item.clientName.trim().isEmpty
-                                ? 'Sin cliente'
-                                : item.clientName.trim();
-                            final project = item.projectName.trim().isEmpty
-                                ? 'Sin proyecto'
-                                : item.projectName.trim();
-
-                            return Padding(
+                          ...items.map(
+                            (item) => Padding(
                               padding: const EdgeInsets.only(bottom: 10),
-                              child: AcrylicSurface(
-                                child: ListTile(
-                                  onTap: () => context.push(
-                                    '${ProformaEditorScreen.routePath}/${item.id}',
-                                  ),
-                                  title: Text(title),
-                                  subtitle: Text(
-                                    '${item.code} · $project · ${status.label}',
-                                  ),
-                                  trailing: IconButton(
-                                    icon: const Icon(
-                                      Icons.delete_outline_rounded,
-                                    ),
-                                    onPressed: () => _delete(item.id),
-                                  ),
+                              child: _ProformaListCard(
+                                proforma: item,
+                                onOpen: () => context.push(
+                                  '${ProformaEditorScreen.routePath}/${item.id}',
                                 ),
+                                onDelete: () => _delete(item.id),
                               ),
-                            );
-                          }),
+                            ),
+                          ),
                       ],
                     );
                   },
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProformaListCard extends StatelessWidget {
+  const _ProformaListCard({
+    required this.proforma,
+    required this.onOpen,
+    required this.onDelete,
+  });
+
+  final Proforma proforma;
+  final VoidCallback onOpen;
+  final VoidCallback onDelete;
+
+  String _formatDate(DateTime date) {
+    final d = date.day.toString().padLeft(2, '0');
+    final m = date.month.toString().padLeft(2, '0');
+    return '$d/$m/${date.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final status = ProformaStatus.fromCode(proforma.status);
+    final client = proforma.clientName.trim().isEmpty
+        ? 'Sin cliente'
+        : proforma.clientName.trim();
+    final project = proforma.projectName.trim().isEmpty
+        ? 'Sin proyecto'
+        : proforma.projectName.trim();
+    final meta =
+        '${proforma.code} · ${_formatDate(proforma.proformaDate)} · ${proforma.currency}';
+
+    return AcrylicSurface(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(22),
+          onTap: onOpen,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 8, 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        client,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    ProformaStatusChip(status: status),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  project,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurface.withValues(alpha: 0.68),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        meta,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurface.withValues(alpha: 0.55),
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Eliminar',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: onDelete,
+                      icon: Icon(
+                        Icons.delete_outline_rounded,
+                        color: colorScheme.onSurface.withValues(alpha: 0.55),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

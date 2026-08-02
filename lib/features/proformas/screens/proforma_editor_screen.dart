@@ -19,6 +19,7 @@ import '../models/proforma_document.dart';
 import '../models/proforma_status.dart';
 import '../providers/proforma_providers.dart';
 import '../widgets/proforma_save_status.dart';
+import '../widgets/proforma_status_chip.dart';
 import '../widgets/proforma_table_builder.dart';
 
 class ProformaEditorScreen extends ConsumerStatefulWidget {
@@ -350,7 +351,7 @@ class _ProformaEditorScreenState extends ConsumerState<ProformaEditorScreen> {
                             ],
                           ),
                         ),
-                        _StatusChip(status: _status),
+                        ProformaStatusChip(status: _status),
                       ],
                     ),
                     const SizedBox(height: 18),
@@ -493,29 +494,3 @@ class _CompanyLogo extends StatelessWidget {
   }
 }
 
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.status});
-
-  final ProformaStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final isDraft = status == ProformaStatus.draft;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: (isDraft ? colorScheme.secondary : colorScheme.primary)
-            .withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        status.label,
-        style: Theme.of(
-          context,
-        ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
-      ),
-    );
-  }
-}
