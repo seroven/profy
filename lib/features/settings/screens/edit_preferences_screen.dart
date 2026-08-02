@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../app/theme/app_color_theme.dart';
-import '../../../app/theme/theme_provider.dart';
+import '../../../app/theme/theme_switch_controller.dart';
 import '../../../shared/widgets/acrylic_surface.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../models/app_currency.dart';
@@ -65,15 +65,23 @@ class _EditPreferencesScreenState
     }
   }
 
-  void _applyThemeMode(ThemeMode mode) {
+  Future<void> _applyThemeMode(ThemeMode mode) async {
+    if (mode == _themeMode) return;
+    if (ref.read(themeSwitchControllerProvider.notifier).isActive) return;
+
     setState(() => _themeMode = mode);
-    ref.read(themeModeProvider.notifier).setThemeMode(mode);
+    await ref.read(themeSwitchControllerProvider.notifier).switchMode(mode);
+    if (!mounted) return;
     _persistCurrent();
   }
 
-  void _applyColorTheme(AppColorTheme theme) {
+  Future<void> _applyColorTheme(AppColorTheme theme) async {
+    if (theme == _colorTheme) return;
+    if (ref.read(themeSwitchControllerProvider.notifier).isActive) return;
+
     setState(() => _colorTheme = theme);
-    ref.read(appColorThemeProvider.notifier).setColorTheme(theme);
+    await ref.read(themeSwitchControllerProvider.notifier).switchColor(theme);
+    if (!mounted) return;
     _persistCurrent();
   }
 
@@ -98,6 +106,7 @@ class _EditPreferencesScreenState
 
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final switching = ref.watch(themeSwitchControllerProvider) != null;
 
     return SettingsSubpageScaffold(
       title: 'Preferencias',
@@ -127,7 +136,9 @@ class _EditPreferencesScreenState
               ),
             ],
             selected: {_themeMode},
-            onSelectionChanged: (value) => _applyThemeMode(value.first),
+            onSelectionChanged: switching
+                ? null
+                : (value) => _applyThemeMode(value.first),
           ),
           const SizedBox(height: 22),
           Text('Color', style: theme.textTheme.titleSmall),
@@ -142,7 +153,7 @@ class _EditPreferencesScreenState
               children: [
                 for (final item in AppColorTheme.values)
                   GestureDetector(
-                    onTap: () => _applyColorTheme(item),
+                    onTap: switching ? null : () => _applyColorTheme(item),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 200),
                       width: 36,
