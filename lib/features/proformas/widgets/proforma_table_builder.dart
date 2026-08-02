@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../app/theme/app_motion.dart';
 import '../../../shared/widgets/acrylic_surface.dart';
 import '../../../shared/widgets/app_button.dart';
 import '../../settings/models/measure_unit.dart';
@@ -9,7 +10,10 @@ import '../models/proforma_totals.dart';
 
 typedef ProformaDocumentChanged = void Function(ProformaDocument document);
 
-/// Builder de tablas: secciones → (ítems XOR subsecciones → ítems) + suma/dto.
+/// Paso horizontal único entre niveles (sección → subsección → fila).
+const double _indentStep = 16;
+
+/// Builder tipográfico: una sola caja (tabla) + chips + sangría. Sin cards internas.
 class ProformaTableBuilder extends StatelessWidget {
   const ProformaTableBuilder({
     super.key,
@@ -60,13 +64,12 @@ class ProformaTableBuilder extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 14),
-        for (var i = 0; i < tables.length; i++) ...[
-          _TableCard(
-            index: i + 1,
-            table: tables[i],
+        for (final table in tables) ...[
+          _TableBlock(
+            table: table,
             defaultUnit: defaultUnit,
             onChanged: _replaceTable,
-            onRemove: () => _removeTable(tables[i].id),
+            onRemove: () => _removeTable(table.id),
           ),
           const SizedBox(height: 14),
         ],
@@ -80,16 +83,14 @@ class ProformaTableBuilder extends StatelessWidget {
   }
 }
 
-class _TableCard extends StatelessWidget {
-  const _TableCard({
-    required this.index,
+class _TableBlock extends StatelessWidget {
+  const _TableBlock({
     required this.table,
     required this.defaultUnit,
     required this.onChanged,
     required this.onRemove,
   });
 
-  final int index;
   final ProformaTableBlock table;
   final MeasureUnit defaultUnit;
   final ValueChanged<ProformaTableBlock> onChanged;
@@ -131,14 +132,31 @@ class _TableCard extends StatelessWidget {
         children: [
           Row(
             children: [
+              const _TypeChip(label: 'Tabla', tone: _ChipTone.table),
+              const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Tabla $index',
+                  table.name.trim().isEmpty
+                      ? 'Sin nombre'
+                      : table.name.trim(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.labelLarge?.copyWith(
                     fontWeight: FontWeight.w700,
                     color: theme.colorScheme.onSurface.withValues(alpha: 0.65),
                   ),
                 ),
+              ),
+              _AddMenuButton(
+                tooltip: 'Agregar en tabla',
+                items: const [
+                  _AddAction(
+                    id: 'section',
+                    label: 'Sección',
+                    icon: Icons.view_agenda_outlined,
+                  ),
+                ],
+                onSelected: (_) => _addSection(),
               ),
               IconButton(
                 tooltip: 'Eliminar tabla',
@@ -147,16 +165,16 @@ class _TableCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 10),
           _BoundField(
             key: ValueKey('table_name_${table.id}'),
             label: 'Nombre de la tabla',
             initialValue: table.name,
             onChanged: (value) => onChanged(table.copyWith(name: value)),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           for (final section in table.sections) ...[
-            _SectionCard(
+            _SectionBlock(
               section: section,
               defaultUnit: defaultUnit,
               onChanged: _updateSection,
@@ -164,19 +182,21 @@ class _TableCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
           ],
-          OutlinedButton.icon(
-            onPressed: _addSection,
-            icon: const Icon(Icons.add_rounded),
-            label: const Text('Agregar sección'),
-          ),
+          if (table.sections.isEmpty)
+            Text(
+              'Agrega una sección con el botón +',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
+              ),
+            ),
         ],
       ),
     );
   }
 }
 
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({
+class _SectionBlock extends StatelessWidget {
+  const _SectionBlock({
     required this.section,
     required this.defaultUnit,
     required this.onChanged,
@@ -239,153 +259,216 @@ class _SectionCard extends StatelessWidget {
     _setRows([...section.rows, ProformaDiscountRow.create(amount: amount)]);
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
+  List<_AddAction> _actions() {
     final hasScopeItems = section.usesSubsections
         ? section.subsections.any(
             (sub) => sub.rows.any((row) => row is ProformaItemRow),
           )
         : section.usesItems;
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: colorScheme.outline.withValues(alpha: 0.22),
+    final actions = <_AddAction>[];
+
+    if (section.usesSubsections) {
+      actions.add(
+        const _AddAction(
+          id: 'subsection',
+          label: 'Subsección',
+          icon: Icons.subdirectory_arrow_right_rounded,
         ),
+      );
+      if ((hasScopeItems || ProformaTotals.hasAnySum(section.rows)) &&
+          ProformaTotals.canAddSum(section.rows)) {
+        actions.add(
+          _AddAction(
+            id: 'sum',
+            label: ProformaTotals.hasAnySum(section.rows)
+                ? 'Suma neta'
+                : 'Suma de sección',
+            icon: Icons.functions_rounded,
+          ),
+        );
+      }
+      if (ProformaTotals.canAddDiscount(section.rows)) {
+        actions.add(
+          const _AddAction(
+            id: 'discount',
+            label: 'Descuento',
+            icon: Icons.percent_rounded,
+          ),
+        );
+      }
+      return actions;
+    }
+
+    actions.add(
+      const _AddAction(
+        id: 'item',
+        label: 'Ítem',
+        icon: Icons.notes_rounded,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
+    );
+    if (section.isEmpty) {
+      actions.add(
+        const _AddAction(
+          id: 'subsection',
+          label: 'Subsección',
+          icon: Icons.account_tree_outlined,
+        ),
+      );
+    }
+    if (section.usesItems) {
+      actions.add(
+        const _AddAction(
+          id: 'wrap',
+          label: 'Englobar en subsección',
+          icon: Icons.wrap_text_rounded,
+        ),
+      );
+    }
+    if (hasScopeItems && ProformaTotals.canAddSum(section.rows)) {
+      actions.add(
+        _AddAction(
+          id: 'sum',
+          label: ProformaTotals.hasAnySum(section.rows)
+              ? 'Suma neta'
+              : 'Suma',
+          icon: Icons.functions_rounded,
+        ),
+      );
+    }
+    if (ProformaTotals.canAddDiscount(section.rows)) {
+      actions.add(
+        const _AddAction(
+          id: 'discount',
+          label: 'Descuento',
+          icon: Icons.percent_rounded,
+        ),
+      );
+    }
+    return actions;
+  }
+
+  Future<void> _onAction(BuildContext context, String id) async {
+    switch (id) {
+      case 'item':
+        _addItem();
+      case 'subsection':
+        _addSubsection();
+      case 'wrap':
+        onChanged(section.wrapItemsInSubsection());
+      case 'sum':
+        _addSum();
+      case 'discount':
+        await _addDiscount(context);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final title = section.description.trim().isEmpty
+        ? 'Sin descripción'
+        : section.description.trim();
+    final actions = _actions();
+
+    return _CollapseHost(
+      storageKey: 'sec_${section.id}',
+      initiallyExpanded: false,
+      headerBuilder: (context, expanded, toggle) {
+        return _BlockHeader(
+          chip: const _TypeChip(label: 'Sección', tone: _ChipTone.section),
+          title: title,
+          expanded: expanded,
+          onToggle: toggle,
+          trailing: [
+            if (actions.isNotEmpty)
+              _AddMenuButton(
+                tooltip: 'Agregar en sección',
+                items: actions,
+                onSelected: (id) => _onAction(context, id),
+              ),
+            IconButton(
+              tooltip: 'Eliminar sección',
+              onPressed: onRemove,
+              icon: const Icon(Icons.close_rounded),
+            ),
+          ],
+        );
+      },
+      body: Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _BoundField(
+              key: ValueKey('sec_desc_${section.id}'),
+              label: 'Descripción de la sección',
+              initialValue: section.description,
+              onChanged: (value) =>
+                  onChanged(section.copyWith(description: value)),
+            ),
+            if (section.usesSubsections) ...[
+              for (final sub in section.subsections) ...[
+                const SizedBox(height: 12),
+                _SubsectionBlock(
+                  section: section,
+                  subsection: sub,
+                  defaultUnit: defaultUnit,
+                  onChanged: (updated) {
+                    onChanged(
+                      section.copyWith(
+                        subsections: [
+                          for (final item in section.subsections)
+                            if (item.id == updated.id) updated else item,
+                        ],
+                      ),
+                    );
+                  },
+                  onRemove: () {
+                    onChanged(
+                      section.copyWith(
+                        subsections: section.subsections
+                            .where((item) => item.id != sub.id)
+                            .toList(),
+                      ),
+                    );
+                  },
+                ),
+              ],
+              ..._financeOnlyRows(
+                rows: section.rows,
+                section: section,
+                onRowsChanged: _setRows,
+                indent: _indentStep,
+              ),
+            ] else ...[
+              ..._contentRows(
+                rows: section.rows,
+                section: section,
+                defaultUnit: defaultUnit,
+                onRowsChanged: _setRows,
+                indent: _indentStep,
+              ),
+            ],
+            if (actions.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
                 child: Text(
-                  'Sección',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
+                  'Agrega un ítem o una subsección con el botón +',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.55),
                   ),
                 ),
               ),
-              IconButton(
-                tooltip: 'Eliminar sección',
-                onPressed: onRemove,
-                icon: const Icon(Icons.close_rounded, size: 20),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          _BoundField(
-            key: ValueKey('sec_desc_${section.id}'),
-            label: 'Descripción de la sección',
-            initialValue: section.description,
-            onChanged: (value) =>
-                onChanged(section.copyWith(description: value)),
-          ),
-          const SizedBox(height: 12),
-          if (section.usesSubsections) ...[
-            for (final sub in section.subsections) ...[
-              _SubsectionCard(
-                section: section,
-                subsection: sub,
-                defaultUnit: defaultUnit,
-                onChanged: (updated) {
-                  onChanged(
-                    section.copyWith(
-                      subsections: [
-                        for (final item in section.subsections)
-                          if (item.id == updated.id) updated else item,
-                      ],
-                    ),
-                  );
-                },
-                onRemove: () {
-                  onChanged(
-                    section.copyWith(
-                      subsections: section.subsections
-                          .where((item) => item.id != sub.id)
-                          .toList(),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 10),
-            ],
-            TextButton.icon(
-              onPressed: _addSubsection,
-              icon: const Icon(Icons.subdirectory_arrow_right_rounded),
-              label: const Text('Agregar subsección'),
-            ),
-            const SizedBox(height: 8),
-            _FinanceRows(
-              rows: section.rows,
-              section: section,
-              onRowsChanged: _setRows,
-            ),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if ((hasScopeItems || ProformaTotals.hasAnySum(section.rows)) &&
-                    ProformaTotals.canAddSum(section.rows))
-                  TextButton.icon(
-                    onPressed: _addSum,
-                    icon: const Icon(Icons.functions_rounded),
-                    label: Text(
-                      ProformaTotals.hasAnySum(section.rows)
-                          ? 'Agregar suma neta'
-                          : 'Agregar suma de sección',
-                    ),
-                  ),
-                if (ProformaTotals.canAddDiscount(section.rows))
-                  TextButton.icon(
-                    onPressed: () => _addDiscount(context),
-                    icon: const Icon(Icons.percent_rounded),
-                    label: const Text('Agregar descuento'),
-                  ),
-              ],
-            ),
-          ] else ...[
-            _ItemAndFinanceRows(
-              rows: section.rows,
-              section: section,
-              defaultUnit: defaultUnit,
-              onRowsChanged: _setRows,
-              onAddItem: _addItem,
-              onAddSum: hasScopeItems ? _addSum : null,
-              onAddDiscount: () => _addDiscount(context),
-            ),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (section.isEmpty)
-                  TextButton.icon(
-                    onPressed: _addSubsection,
-                    icon: const Icon(Icons.account_tree_outlined),
-                    label: const Text('Agregar subsección'),
-                  ),
-                if (section.usesItems)
-                  TextButton.icon(
-                    onPressed: () =>
-                        onChanged(section.wrapItemsInSubsection()),
-                    icon: const Icon(Icons.wrap_text_rounded),
-                    label: const Text('Englobar en subsección'),
-                  ),
-              ],
-            ),
           ],
-        ],
+        ),
       ),
     );
   }
 }
 
-class _SubsectionCard extends StatelessWidget {
-  const _SubsectionCard({
+class _SubsectionBlock extends StatelessWidget {
+  const _SubsectionBlock({
     required this.section,
     required this.subsection,
     required this.defaultUnit,
@@ -444,55 +527,286 @@ class _SubsectionCard extends StatelessWidget {
     ]);
   }
 
+  List<_AddAction> _actions() {
+    final hasItems = subsection.rows.any((row) => row is ProformaItemRow);
+    final actions = <_AddAction>[
+      const _AddAction(
+        id: 'item',
+        label: 'Ítem',
+        icon: Icons.notes_rounded,
+      ),
+    ];
+    if (hasItems && ProformaTotals.canAddSum(subsection.rows)) {
+      actions.add(
+        _AddAction(
+          id: 'sum',
+          label: ProformaTotals.hasAnySum(subsection.rows)
+              ? 'Suma neta'
+              : 'Suma',
+          icon: Icons.functions_rounded,
+        ),
+      );
+    }
+    if (ProformaTotals.canAddDiscount(subsection.rows)) {
+      actions.add(
+        const _AddAction(
+          id: 'discount',
+          label: 'Descuento',
+          icon: Icons.percent_rounded,
+        ),
+      );
+    }
+    return actions;
+  }
+
+  Future<void> _onAction(BuildContext context, String id) async {
+    switch (id) {
+      case 'item':
+        _addItem();
+      case 'sum':
+        _addSum();
+      case 'discount':
+        await _addDiscount(context);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = subsection.description.trim().isEmpty
+        ? 'Sin descripción'
+        : subsection.description.trim();
+    final actions = _actions();
+
+    return Padding(
+      padding: const EdgeInsets.only(left: _indentStep),
+      child: _CollapseHost(
+        storageKey: 'sub_${subsection.id}',
+        initiallyExpanded: false,
+        headerBuilder: (context, expanded, toggle) {
+          return _BlockHeader(
+            chip: const _TypeChip(
+              label: 'Subsección',
+              tone: _ChipTone.subsection,
+            ),
+            title: title,
+            expanded: expanded,
+            onToggle: toggle,
+            trailing: [
+              _AddMenuButton(
+                tooltip: 'Agregar en subsección',
+                items: actions,
+                onSelected: (id) => _onAction(context, id),
+              ),
+              IconButton(
+                tooltip: 'Eliminar subsección',
+                onPressed: onRemove,
+                icon: const Icon(Icons.close_rounded),
+              ),
+            ],
+          );
+        },
+        body: Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _BoundField(
+                key: ValueKey('sub_desc_${subsection.id}'),
+                label: 'Descripción de la subsección',
+                initialValue: subsection.description,
+                onChanged: (value) =>
+                    onChanged(subsection.copyWith(description: value)),
+              ),
+              ..._contentRows(
+                rows: subsection.rows,
+                section: section,
+                subsection: subsection,
+                defaultUnit: defaultUnit,
+                onRowsChanged: _setRows,
+                indent: _indentStep,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+List<Widget> _contentRows({
+  required List<ProformaTableRow> rows,
+  required ProformaSection section,
+  required MeasureUnit defaultUnit,
+  required ValueChanged<List<ProformaTableRow>> onRowsChanged,
+  required double indent,
+  ProformaSubsection? subsection,
+}) {
+  return [
+    for (final row in rows) ...[
+      const SizedBox(height: 10),
+      if (row is ProformaItemRow)
+        _ItemRow(
+          item: row,
+          indent: indent,
+          onChanged: (updated) {
+            onRowsChanged([
+              for (final item in rows)
+                if (item.id == updated.id) updated else item,
+            ]);
+          },
+          onRemove: () =>
+              onRowsChanged(ProformaTotals.removeRow(rows, row.id)),
+        )
+      else if (row is ProformaSumRow || row is ProformaDiscountRow)
+        _FinanceRow(
+          row: row,
+          rows: rows,
+          section: section,
+          subsection: subsection,
+          indent: indent,
+          onChanged: (updated) {
+            onRowsChanged([
+              for (final item in rows)
+                if (item.id == updated.id) updated else item,
+            ]);
+          },
+          onRemove: () =>
+              onRowsChanged(ProformaTotals.removeRow(rows, row.id)),
+        ),
+    ],
+  ];
+}
+
+List<Widget> _financeOnlyRows({
+  required List<ProformaTableRow> rows,
+  required ProformaSection section,
+  required ValueChanged<List<ProformaTableRow>> onRowsChanged,
+  required double indent,
+}) {
+  final finance = rows.where(
+    (row) => row is ProformaSumRow || row is ProformaDiscountRow,
+  );
+  return [
+    for (final row in finance) ...[
+      const SizedBox(height: 10),
+      _FinanceRow(
+        row: row,
+        rows: rows,
+        section: section,
+        indent: indent,
+        onChanged: (updated) {
+          onRowsChanged([
+            for (final item in rows)
+              if (item.id == updated.id) updated else item,
+          ]);
+        },
+        onRemove: () => onRowsChanged(ProformaTotals.removeRow(rows, row.id)),
+      ),
+    ],
+  ];
+}
+
+class _ItemRow extends StatelessWidget {
+  const _ItemRow({
+    required this.item,
+    required this.onChanged,
+    required this.onRemove,
+    this.indent = 0,
+  });
+
+  final ProformaItemRow item;
+  final ValueChanged<ProformaItemRow> onChanged;
+  final VoidCallback onRemove;
+  final double indent;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final hasItems = subsection.rows.any((row) => row is ProformaItemRow);
 
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
-        borderRadius: BorderRadius.circular(12),
-      ),
+    return Padding(
+      padding: EdgeInsets.only(left: indent),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              Expanded(
-                child: Text(
-                  'Subsección',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+              const _TypeChip(label: 'Ítem', tone: _ChipTone.item),
+              const Spacer(),
+              Text(
+                'Total ${_money(item.total)}',
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               IconButton(
-                tooltip: 'Eliminar subsección',
+                tooltip: 'Eliminar ítem',
                 onPressed: onRemove,
                 icon: const Icon(Icons.close_rounded, size: 20),
               ),
             ],
           ),
+          const SizedBox(height: 6),
           _BoundField(
-            key: ValueKey('sub_desc_${subsection.id}'),
-            label: 'Descripción de la subsección',
-            initialValue: subsection.description,
-            onChanged: (value) =>
-                onChanged(subsection.copyWith(description: value)),
+            key: ValueKey('item_desc_${item.id}'),
+            label: 'Descripción',
+            initialValue: item.description,
+            onChanged: (value) => onChanged(item.copyWith(description: value)),
           ),
-          const SizedBox(height: 10),
-          _ItemAndFinanceRows(
-            rows: subsection.rows,
-            section: section,
-            subsection: subsection,
-            defaultUnit: defaultUnit,
-            onRowsChanged: _setRows,
-            onAddItem: _addItem,
-            onAddSum: hasItems ? _addSum : null,
-            onAddDiscount: () => _addDiscount(context),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _BoundField(
+                  key: ValueKey('item_qty_${item.id}'),
+                  label: 'Cantidad',
+                  initialValue: _stripTrailingZeros(item.quantity),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                  ],
+                  onChanged: (value) {
+                    final parsed = double.tryParse(value.replaceAll(',', '.'));
+                    if (parsed == null) return;
+                    onChanged(item.copyWith(quantity: parsed));
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _BoundField(
+                  key: ValueKey('item_price_${item.id}'),
+                  label: 'P. unitario',
+                  initialValue: _stripTrailingZeros(item.unitPrice),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+                  ],
+                  onChanged: (value) {
+                    final parsed = double.tryParse(value.replaceAll(',', '.'));
+                    if (parsed == null) return;
+                    onChanged(item.copyWith(unitPrice: parsed));
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            children: [
+              for (final unit in MeasureUnit.values)
+                ChoiceChip(
+                  label: Text(unit.code),
+                  selected: item.unit == unit.code,
+                  visualDensity: VisualDensity.compact,
+                  onSelected: (_) =>
+                      onChanged(item.copyWith(unit: unit.code)),
+                ),
+            ],
           ),
         ],
       ),
@@ -500,148 +814,15 @@ class _SubsectionCard extends StatelessWidget {
   }
 }
 
-class _ItemAndFinanceRows extends StatelessWidget {
-  const _ItemAndFinanceRows({
-    required this.rows,
-    required this.section,
-    required this.defaultUnit,
-    required this.onRowsChanged,
-    required this.onAddItem,
-    required this.onAddDiscount,
-    this.subsection,
-    this.onAddSum,
-  });
-
-  final List<ProformaTableRow> rows;
-  final ProformaSection section;
-  final ProformaSubsection? subsection;
-  final MeasureUnit defaultUnit;
-  final ValueChanged<List<ProformaTableRow>> onRowsChanged;
-  final VoidCallback onAddItem;
-  final VoidCallback? onAddSum;
-  final VoidCallback onAddDiscount;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final row in rows) ...[
-          if (row is ProformaItemRow) ...[
-            _ItemCard(
-              item: row,
-              onChanged: (updated) {
-                onRowsChanged([
-                  for (final item in rows)
-                    if (item.id == updated.id) updated else item,
-                ]);
-              },
-              onRemove: () {
-                onRowsChanged(rows.where((item) => item.id != row.id).toList());
-              },
-            ),
-            const SizedBox(height: 8),
-          ] else if (row is ProformaSumRow || row is ProformaDiscountRow) ...[
-            _FinanceRowCard(
-              row: row,
-              rows: rows,
-              section: section,
-              subsection: subsection,
-              onChanged: (updated) {
-                onRowsChanged([
-                  for (final item in rows)
-                    if (item.id == updated.id) updated else item,
-                ]);
-              },
-              onRemove: () {
-                onRowsChanged(ProformaTotals.removeRow(rows, row.id));
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
-        ],
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            TextButton.icon(
-              onPressed: onAddItem,
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Agregar ítem'),
-            ),
-            if (onAddSum != null && ProformaTotals.canAddSum(rows))
-              TextButton.icon(
-                onPressed: onAddSum,
-                icon: const Icon(Icons.functions_rounded),
-                label: Text(
-                  ProformaTotals.hasAnySum(rows)
-                      ? 'Agregar suma neta'
-                      : 'Agregar suma',
-                ),
-              ),
-            if (ProformaTotals.canAddDiscount(rows))
-              TextButton.icon(
-                onPressed: onAddDiscount,
-                icon: const Icon(Icons.percent_rounded),
-                label: const Text('Agregar descuento'),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _FinanceRows extends StatelessWidget {
-  const _FinanceRows({
-    required this.rows,
-    required this.section,
-    required this.onRowsChanged,
-  });
-
-  final List<ProformaTableRow> rows;
-  final ProformaSection section;
-  final ValueChanged<List<ProformaTableRow>> onRowsChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final finance = rows.where(
-      (row) => row is ProformaSumRow || row is ProformaDiscountRow,
-    );
-    if (finance.isEmpty) return const SizedBox.shrink();
-
-    return Column(
-      children: [
-        for (final row in finance) ...[
-          _FinanceRowCard(
-            row: row,
-            rows: rows,
-            section: section,
-            onChanged: (updated) {
-              onRowsChanged([
-                for (final item in rows)
-                  if (item.id == updated.id) updated else item,
-              ]);
-            },
-            onRemove: () {
-              onRowsChanged(ProformaTotals.removeRow(rows, row.id));
-            },
-          ),
-          const SizedBox(height: 8),
-        ],
-      ],
-    );
-  }
-}
-
-class _FinanceRowCard extends StatelessWidget {
-  const _FinanceRowCard({
+class _FinanceRow extends StatelessWidget {
+  const _FinanceRow({
     required this.row,
     required this.rows,
     required this.section,
     required this.onChanged,
     required this.onRemove,
     this.subsection,
+    this.indent = 0,
   });
 
   final ProformaTableRow row;
@@ -650,13 +831,11 @@ class _FinanceRowCard extends StatelessWidget {
   final ProformaSubsection? subsection;
   final ValueChanged<ProformaTableRow> onChanged;
   final VoidCallback onRemove;
-
-  String _money(double value) => value.toStringAsFixed(2);
+  final double indent;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
 
     if (row is ProformaSumRow) {
       final sum = row as ProformaSumRow;
@@ -673,33 +852,27 @@ class _FinanceRowCard extends StatelessWidget {
       );
       final isChain = sum.target == ProformaSumTarget.chain;
 
-      return Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          color: colorScheme.primary.withValues(alpha: 0.10),
-          border: Border.all(
-            color: colorScheme.primary.withValues(alpha: 0.28),
-          ),
-        ),
+      return Padding(
+        padding: EdgeInsets.only(left: indent),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
               children: [
-                const Icon(Icons.functions_rounded, size: 18),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    isChain ? 'Suma neta' : 'Suma',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+                _TypeChip(
+                  label: isChain ? 'Suma neta' : 'Suma',
+                  tone: _ChipTone.sum,
+                ),
+                const Spacer(),
+                Text(
+                  _money(value),
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 IconButton(
                   onPressed: onRemove,
-                  icon: const Icon(Icons.close_rounded, size: 18),
+                  icon: const Icon(Icons.close_rounded, size: 20),
                 ),
               ],
             ),
@@ -709,53 +882,40 @@ class _FinanceRowCard extends StatelessWidget {
               initialValue: sum.label,
               onChanged: (value) => onChanged(sum.copyWith(label: value)),
             ),
-            const SizedBox(height: 8),
-            Text(
-              isChain ? 'Total: ${_money(value)}' : 'Subtotal: ${_money(value)}',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            if (!isChain && net != value)
+            if (!isChain && net != value) ...[
+              const SizedBox(height: 6),
               Text(
                 'Neto tras descuentos: ${_money(net)}',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurface.withValues(alpha: 0.75),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                 ),
               ),
+            ],
           ],
         ),
       );
     }
 
     final discount = row as ProformaDiscountRow;
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: colorScheme.error.withValues(alpha: 0.08),
-        border: Border.all(
-          color: colorScheme.error.withValues(alpha: 0.25),
-        ),
-      ),
+    return Padding(
+      padding: EdgeInsets.only(left: indent),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              const Icon(Icons.percent_rounded, size: 18),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Descuento',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+              const _TypeChip(label: 'Descuento', tone: _ChipTone.discount),
+              const Spacer(),
+              Text(
+                '-${_money(discount.amount)}',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: theme.colorScheme.error,
                 ),
               ),
               IconButton(
                 onPressed: onRemove,
-                icon: const Icon(Icons.close_rounded, size: 18),
+                icon: const Icon(Icons.close_rounded, size: 20),
               ),
             ],
           ),
@@ -765,16 +925,206 @@ class _FinanceRowCard extends StatelessWidget {
             initialValue: discount.label,
             onChanged: (value) => onChanged(discount.copyWith(label: value)),
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Monto: -${_money(discount.amount)}',
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: colorScheme.error,
-            ),
-          ),
         ],
       ),
+    );
+  }
+}
+
+enum _ChipTone { table, section, subsection, item, sum, discount }
+
+class _TypeChip extends StatelessWidget {
+  const _TypeChip({required this.label, required this.tone});
+
+  final String label;
+  final _ChipTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final color = switch (tone) {
+      _ChipTone.table => colorScheme.primary,
+      _ChipTone.section => colorScheme.tertiary,
+      _ChipTone.subsection => colorScheme.secondary,
+      _ChipTone.item => colorScheme.outline,
+      _ChipTone.sum => colorScheme.primary,
+      _ChipTone.discount => colorScheme.error,
+    };
+
+    return Text(
+      label,
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: color,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.3,
+          ),
+    );
+  }
+}
+
+class _BlockHeader extends StatelessWidget {
+  const _BlockHeader({
+    required this.chip,
+    required this.title,
+    required this.expanded,
+    required this.onToggle,
+    this.trailing = const [],
+  });
+
+  final Widget chip;
+  final String title;
+  final bool expanded;
+  final VoidCallback onToggle;
+  final List<Widget> trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Row(
+      children: [
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          onPressed: onToggle,
+          icon: AnimatedRotation(
+            turns: expanded ? 0.5 : 0,
+            duration: AppMotion.fast,
+            child: const Icon(Icons.expand_more_rounded),
+          ),
+        ),
+        chip,
+        const SizedBox(width: 8),
+        Expanded(
+          child: GestureDetector(
+            onTap: onToggle,
+            behavior: HitTestBehavior.opaque,
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+        ...trailing,
+      ],
+    );
+  }
+}
+
+class _CollapseHost extends StatefulWidget {
+  const _CollapseHost({
+    required this.storageKey,
+    required this.initiallyExpanded,
+    required this.headerBuilder,
+    required this.body,
+  });
+
+  final String storageKey;
+  final bool initiallyExpanded;
+  final Widget Function(
+    BuildContext context,
+    bool expanded,
+    VoidCallback toggle,
+  ) headerBuilder;
+  final Widget body;
+
+  @override
+  State<_CollapseHost> createState() => _CollapseHostState();
+}
+
+class _CollapseHostState extends State<_CollapseHost> {
+  static final Map<String, bool> _expandedByKey = {};
+
+  late bool _expanded;
+
+  @override
+  void initState() {
+    super.initState();
+    _expanded = _expandedByKey[widget.storageKey] ?? widget.initiallyExpanded;
+  }
+
+  void _toggle() {
+    setState(() {
+      _expanded = !_expanded;
+      _expandedByKey[widget.storageKey] = _expanded;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        widget.headerBuilder(context, _expanded, _toggle),
+        AnimatedSize(
+          duration: AppMotion.fast,
+          curve: AppMotion.standard,
+          alignment: Alignment.topCenter,
+          child: _expanded
+              ? widget.body
+              : const SizedBox(width: double.infinity),
+        ),
+      ],
+    );
+  }
+}
+
+class _AddAction {
+  const _AddAction({
+    required this.id,
+    required this.label,
+    required this.icon,
+  });
+
+  final String id;
+  final String label;
+  final IconData icon;
+}
+
+class _AddMenuButton extends StatelessWidget {
+  const _AddMenuButton({
+    required this.items,
+    required this.onSelected,
+    required this.tooltip,
+  });
+
+  final List<_AddAction> items;
+  final ValueChanged<String> onSelected;
+  final String tooltip;
+
+  Future<void> _open(BuildContext context) async {
+    if (items.isEmpty) return;
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final action in items)
+                ListTile(
+                  leading: Icon(action.icon),
+                  title: Text(action.label),
+                  onTap: () => Navigator.of(sheetContext).pop(action.id),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+    if (selected != null) onSelected(selected);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: items.isEmpty ? null : () => _open(context),
+      icon: const Icon(Icons.add_rounded),
     );
   }
 }
@@ -884,136 +1234,6 @@ class _DiscountAmountDialogState extends State<_DiscountAmountDialog> {
   }
 }
 
-class _ItemCard extends StatelessWidget {
-  const _ItemCard({
-    required this.item,
-    required this.onChanged,
-    required this.onRemove,
-  });
-
-  final ProformaItemRow item;
-  final ValueChanged<ProformaItemRow> onChanged;
-  final VoidCallback onRemove;
-
-  String _money(double value) => value.toStringAsFixed(2);
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: colorScheme.outline.withValues(alpha: 0.18),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Ítem',
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              IconButton(
-                tooltip: 'Eliminar ítem',
-                onPressed: onRemove,
-                icon: const Icon(Icons.close_rounded, size: 18),
-              ),
-            ],
-          ),
-          _BoundField(
-            key: ValueKey('item_desc_${item.id}'),
-            label: 'Descripción',
-            initialValue: item.description,
-            onChanged: (value) => onChanged(item.copyWith(description: value)),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _BoundField(
-                  key: ValueKey('item_qty_${item.id}'),
-                  label: 'Cantidad',
-                  initialValue: _stripTrailingZeros(item.quantity),
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-                  ],
-                  onChanged: (value) {
-                    final parsed = double.tryParse(value.replaceAll(',', '.'));
-                    if (parsed == null) return;
-                    onChanged(item.copyWith(quantity: parsed));
-                  },
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _BoundField(
-                  key: ValueKey('item_price_${item.id}'),
-                  label: 'P. unitario',
-                  initialValue: _stripTrailingZeros(item.unitPrice),
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-                  ],
-                  onChanged: (value) {
-                    final parsed = double.tryParse(value.replaceAll(',', '.'));
-                    if (parsed == null) return;
-                    onChanged(item.copyWith(unitPrice: parsed));
-                  },
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text('Unidad', style: theme.textTheme.labelMedium),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 6,
-            children: [
-              for (final unit in MeasureUnit.values)
-                ChoiceChip(
-                  label: Text(unit.code),
-                  selected: item.unit == unit.code,
-                  onSelected: (_) =>
-                      onChanged(item.copyWith(unit: unit.code)),
-                ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Align(
-            alignment: Alignment.centerRight,
-            child: Text(
-              'Total: ${_money(item.total)}',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _stripTrailingZeros(double value) {
-    if (value == value.roundToDouble()) return value.toInt().toString();
-    return value.toString();
-  }
-}
-
 class _BoundField extends StatefulWidget {
   const _BoundField({
     super.key,
@@ -1071,4 +1291,11 @@ class _BoundFieldState extends State<_BoundField> {
       ),
     );
   }
+}
+
+String _money(double value) => value.toStringAsFixed(2);
+
+String _stripTrailingZeros(double value) {
+  if (value == value.roundToDouble()) return value.toInt().toString();
+  return value.toString();
 }

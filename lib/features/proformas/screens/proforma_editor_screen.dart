@@ -96,7 +96,9 @@ class _ProformaEditorScreenState extends ConsumerState<ProformaEditorScreen> {
     setState(() => _saveStatus = ProformaSaveStatus.saving);
 
     try {
-      await ref.read(proformaServiceProvider).saveEditorState(
+      await ref
+          .read(proformaServiceProvider)
+          .saveEditorState(
             id: widget.proformaId,
             clientName: _clientController.text,
             projectName: _projectController.text,
@@ -196,8 +198,7 @@ class _ProformaEditorScreenState extends ConsumerState<ProformaEditorScreen> {
 
           final companyName = prefs?.companyName?.trim();
           final logoPath = prefs?.companyLogoPath;
-          final hasCompanyName =
-              companyName != null && companyName.isNotEmpty;
+          final hasCompanyName = companyName != null && companyName.isNotEmpty;
 
           return ListView(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 36),
@@ -223,16 +224,18 @@ class _ProformaEditorScreenState extends ConsumerState<ProformaEditorScreen> {
                                   fontWeight: FontWeight.w700,
                                   color: hasCompanyName
                                       ? null
-                                      : colorScheme.onSurface
-                                          .withValues(alpha: 0.45),
+                                      : colorScheme.onSurface.withValues(
+                                          alpha: 0.45,
+                                        ),
                                 ),
                               ),
                               const SizedBox(height: 4),
                               Text(
                                 _code,
                                 style: theme.textTheme.bodySmall?.copyWith(
-                                  color: colorScheme.onSurface
-                                      .withValues(alpha: 0.65),
+                                  color: colorScheme.onSurface.withValues(
+                                    alpha: 0.65,
+                                  ),
                                 ),
                               ),
                             ],
@@ -328,9 +331,7 @@ class _CompanyLogo extends StatelessWidget {
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: colorScheme.outline.withValues(alpha: 0.25),
-        ),
+        border: Border.all(color: colorScheme.outline.withValues(alpha: 0.25)),
       ),
       clipBehavior: Clip.antiAlias,
       child: hasLogo
@@ -362,9 +363,9 @@ class _StatusChip extends StatelessWidget {
       ),
       child: Text(
         status.label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
+        style: Theme.of(
+          context,
+        ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
       ),
     );
   }
