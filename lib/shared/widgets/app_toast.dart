@@ -36,31 +36,21 @@ class AppToast {
     late final OverlayEntry entry;
     entry = OverlayEntry(
       builder: (overlayContext) {
-        final media = MediaQuery.of(overlayContext);
-        return Positioned(
-          top: media.padding.top + 12,
-          left: 0,
-          right: 0,
-          child: IgnorePointer(
-            ignoring: !dismissible,
-            child: Padding(
-              padding: margin,
-              child: _AppToastCard(
-                message: message,
-                type: type,
-                icon: icon,
-                backgroundColor: backgroundColor,
-                foregroundColor: foregroundColor,
-                borderRadius: borderRadius,
-                duration: duration,
-                onDismiss: () {
-                  if (_currentEntry == entry) {
-                    hide();
-                  }
-                },
-              ),
-            ),
-          ),
+        return _AppToastHost(
+          message: message,
+          type: type,
+          icon: icon,
+          backgroundColor: backgroundColor,
+          foregroundColor: foregroundColor,
+          borderRadius: borderRadius,
+          margin: margin,
+          duration: duration,
+          dismissible: dismissible,
+          onDismiss: () {
+            if (_currentEntry == entry) {
+              hide();
+            }
+          },
         );
       },
     );
@@ -135,13 +125,15 @@ class AppToast {
   }
 }
 
-class _AppToastCard extends StatefulWidget {
-  const _AppToastCard({
+class _AppToastHost extends StatefulWidget {
+  const _AppToastHost({
     required this.message,
     required this.type,
     required this.duration,
     required this.onDismiss,
     required this.borderRadius,
+    required this.margin,
+    required this.dismissible,
     this.icon,
     this.backgroundColor,
     this.foregroundColor,
@@ -152,19 +144,22 @@ class _AppToastCard extends StatefulWidget {
   final Duration duration;
   final VoidCallback onDismiss;
   final double borderRadius;
+  final EdgeInsetsGeometry margin;
+  final bool dismissible;
   final IconData? icon;
   final Color? backgroundColor;
   final Color? foregroundColor;
 
   @override
-  State<_AppToastCard> createState() => _AppToastCardState();
+  State<_AppToastHost> createState() => _AppToastHostState();
 }
 
-class _AppToastCardState extends State<_AppToastCard>
+class _AppToastHostState extends State<_AppToastHost>
     with SingleTickerProviderStateMixin {
+  static const double _slideDistance = 72;
+
   late final AnimationController _controller;
-  late final Animation<Offset> _slide;
-  late final Animation<double> _fade;
+  late final Animation<double> _progress;
   bool _dismissing = false;
 
   @override
@@ -172,20 +167,11 @@ class _AppToastCardState extends State<_AppToastCard>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: AppMotion.normal,
+      // Caída más pausada; el tiempo flotando lo define [duration] del toast.
+      duration: const Duration(milliseconds: 780),
       reverseDuration: AppMotion.fast,
     );
-    _slide = Tween<Offset>(
-      begin: const Offset(0, -0.85),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: AppMotion.entrance,
-        reverseCurve: AppMotion.exit,
-      ),
-    );
-    _fade = CurvedAnimation(
+    _progress = CurvedAnimation(
       parent: _controller,
       curve: AppMotion.entrance,
       reverseCurve: AppMotion.exit,
@@ -210,6 +196,7 @@ class _AppToastCardState extends State<_AppToastCard>
 
   @override
   Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final defaults = _toastStyle(colorScheme, widget.type, isDark);
@@ -217,46 +204,61 @@ class _AppToastCardState extends State<_AppToastCard>
     final foreground = widget.foregroundColor ?? defaults.foreground;
     final icon = widget.icon ?? defaults.icon;
     final radius = BorderRadius.circular(widget.borderRadius);
+    final restingTop = media.padding.top + 12;
 
-    return SlideTransition(
-      position: _slide,
-      child: FadeTransition(
-        opacity: _fade,
-        child: Material(
-          color: Colors.transparent,
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 480),
-              child: AcrylicSurface(
-                borderRadius: radius,
-                blur: 24,
-                tint: tint,
-                borderColor: defaults.border,
-                opacity: defaults.opacity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 14,
-                ),
-                child: InkWell(
+    // BackdropFilter falla dentro de Transform/Opacity (Slide/FadeTransition).
+    // Animamos la posición por layout para que el acrílico se vea desde el inicio.
+    return AnimatedBuilder(
+      animation: _progress,
+      builder: (context, child) {
+        final t = _progress.value;
+        return Positioned(
+          top: restingTop - ((1 - t) * _slideDistance),
+          left: 0,
+          right: 0,
+          child: child!,
+        );
+      },
+      child: IgnorePointer(
+        ignoring: !widget.dismissible,
+        child: Padding(
+          padding: widget.margin,
+          child: Material(
+            color: Colors.transparent,
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 480),
+                child: AcrylicSurface(
                   borderRadius: radius,
-                  onTap: _dismiss,
-                  child: Row(
-                    children: [
-                      Icon(icon, color: foreground, size: 22),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          widget.message,
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(
-                            color: foreground,
-                            fontWeight: FontWeight.w600,
-                            height: 1.25,
+                  blur: 24,
+                  tint: tint,
+                  borderColor: defaults.border,
+                  opacity: defaults.opacity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                  child: InkWell(
+                    borderRadius: radius,
+                    onTap: _dismiss,
+                    child: Row(
+                      children: [
+                        Icon(icon, color: foreground, size: 22),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            widget.message,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                              color: foreground,
+                              fontWeight: FontWeight.w600,
+                              height: 1.25,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),

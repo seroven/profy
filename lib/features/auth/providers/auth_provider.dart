@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/database/database_provider.dart';
+import '../../settings/providers/settings_service_providers.dart';
+import '../../settings/providers/theme_sync.dart';
 import '../models/auth_state.dart';
 import '../services/auth_service.dart';
 import '../services/password_hasher.dart';
@@ -36,6 +38,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     final bootstrap = await service.bootstrap();
 
     if (bootstrap.user != null) {
+      await _ensureProfileAndTheme(bootstrap.user!.id);
       return AuthState(
         isAuthenticated: true,
         needsSetup: false,
@@ -44,6 +47,12 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     }
 
     return AuthState.unauthenticated(needsSetup: bootstrap.needsSetup);
+  }
+
+  Future<void> _ensureProfileAndTheme(int userId) async {
+    final ensured =
+        await ref.read(profileBootstrapServiceProvider).ensureForUser(userId);
+    applyPreferencesToThemeReader(ref, ensured.preferences);
   }
 
   /// Retorna mensaje de error o `null` si el acceso fue exitoso.
@@ -58,6 +67,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         username: username,
         password: password,
       );
+      await _ensureProfileAndTheme(user.id);
       state = AsyncData(
         AuthState(
           isAuthenticated: true,
@@ -80,6 +90,25 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     state = AsyncData(AuthState.unauthenticated(needsSetup: needsSetup));
   }
 
+  Future<void> reloadUser() async {
+    final current = state.valueOrNull;
+    final userId = current?.user?.id;
+    if (current == null || userId == null) return;
+
+    final database = ref.read(databaseProvider);
+    final user = await (database.select(database.users)
+          ..where((t) => t.id.equals(userId)))
+        .getSingle();
+
+    state = AsyncData(
+      current.copyWith(
+        isAuthenticated: true,
+        needsSetup: false,
+        user: user,
+      ),
+    );
+  }
+
   Future<void> touchSession() async {
     final current = state.valueOrNull;
     if (current == null || !current.isAuthenticated) return;
@@ -92,7 +121,6 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     final current = state.valueOrNull;
     if (current == null || !current.isAuthenticated) return;
 
-    // Validación en segundo plano: sin duración mínima artificial.
     final service = await ref.read(authServiceProvider.future);
     final user = await service.restoreSession();
     if (user == null) {

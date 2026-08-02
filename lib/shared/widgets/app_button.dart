@@ -56,7 +56,7 @@ class _AppButtonState extends State<AppButton> {
           borderColor: colorScheme.primary.withValues(
             alpha: isDark ? 0.55 : 0.40,
           ),
-          opacity: isDark ? 0.28 : 0.38,
+          opacity: isDark ? 0.28 : 0.22,
           child: Material(
             color: Colors.transparent,
             child: InkWell(

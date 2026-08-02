@@ -3,12 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app_color_theme.dart';
 
-/// Modo de tema actual. Persistencia se añadirá más adelante.
+/// Modo de tema actual (persistido en user_preferences).
 class ThemeModeNotifier extends Notifier<ThemeMode> {
   @override
   ThemeMode build() => ThemeMode.dark;
 
-  void setThemeMode(ThemeMode mode) => state = mode;
+  void setThemeMode(ThemeMode mode) {
+    // Solo claro/oscuro en este producto.
+    state = mode == ThemeMode.light ? ThemeMode.light : ThemeMode.dark;
+  }
 
   void toggle() {
     state = state == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
@@ -19,7 +22,7 @@ final themeModeProvider = NotifierProvider<ThemeModeNotifier, ThemeMode>(
   ThemeModeNotifier.new,
 );
 
-/// Color de acento actual. Persistencia se añadirá más adelante.
+/// Color de acento actual (persistido en user_preferences).
 class AppColorThemeNotifier extends Notifier<AppColorTheme> {
   @override
   AppColorTheme build() => AppColorTheme.blue;

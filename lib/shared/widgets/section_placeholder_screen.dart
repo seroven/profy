@@ -13,8 +13,10 @@ class SectionPlaceholderScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return ColoredBox(
-      color: Colors.black,
+      color: colorScheme.surface,
       child: SafeArea(
         child: Center(
           child: Column(
@@ -23,7 +25,7 @@ class SectionPlaceholderScreen extends StatelessWidget {
               Text(
                 '$name Screen',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: Colors.white,
+                      color: colorScheme.onSurface,
                       fontWeight: FontWeight.w600,
                     ),
               ),

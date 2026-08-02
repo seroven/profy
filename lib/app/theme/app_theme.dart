@@ -33,11 +33,17 @@ class AppTheme {
       fontFamily: AppFonts.family,
     ).textTheme.apply(fontFamily: AppFonts.family);
 
+    final isDark = colorScheme.brightness == Brightness.dark;
+    final fieldBorder = colorScheme.onSurface.withValues(
+      alpha: isDark ? 0.14 : 0.16,
+    );
+
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
       fontFamily: AppFonts.family,
       textTheme: textTheme,
+      scaffoldBackgroundColor: colorScheme.surface,
       visualDensity: VisualDensity.standard,
       appBarTheme: AppBarTheme(
         centerTitle: true,
@@ -55,24 +61,16 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: colorScheme.surface.withValues(
-          alpha: colorScheme.brightness == Brightness.dark ? 0.22 : 0.55,
+        fillColor: colorScheme.onSurface.withValues(
+          alpha: isDark ? 0.08 : 0.05,
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(
-            color: Colors.white.withValues(
-              alpha: colorScheme.brightness == Brightness.dark ? 0.12 : 0.35,
-            ),
-          ),
+          borderSide: BorderSide(color: fieldBorder),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(
-            color: Colors.white.withValues(
-              alpha: colorScheme.brightness == Brightness.dark ? 0.12 : 0.35,
-            ),
-          ),
+          borderSide: BorderSide(color: fieldBorder),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),

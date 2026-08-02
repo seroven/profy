@@ -47,7 +47,7 @@ class FloatingNavBar extends StatelessWidget {
         borderRadius: BorderRadius.circular(28),
         blur: 24,
         tint: colorScheme.primary,
-        opacity: Theme.of(context).brightness == Brightness.dark ? 0.12 : 0.40,
+        opacity: Theme.of(context).brightness == Brightness.dark ? 0.12 : 0.16,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         child: Row(
           children: [

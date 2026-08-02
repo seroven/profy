@@ -27,11 +27,26 @@ class AcrylicSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final tintColor = tint ?? (isDark ? Colors.white : Colors.white);
-    final fillOpacity = opacity ?? (isDark ? 0.10 : 0.48);
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = colorScheme.brightness == Brightness.dark;
+    final tintColor = tint ?? (isDark ? Colors.white : colorScheme.primary);
+
+    final topColor = isDark
+        ? tintColor.withValues(alpha: (opacity ?? 0.10) + 0.06)
+        : Color.alphaBlend(
+            tintColor.withValues(alpha: (opacity ?? 0.14) * 0.55),
+            colorScheme.surface.withValues(alpha: 0.88),
+          );
+    final bottomColor = isDark
+        ? tintColor.withValues(alpha: (opacity ?? 0.10) * 0.55)
+        : Color.alphaBlend(
+            tintColor.withValues(alpha: (opacity ?? 0.14) * 0.28),
+            colorScheme.surfaceContainerHighest.withValues(alpha: 0.72),
+          );
     final edge = borderColor ??
-        Colors.white.withValues(alpha: isDark ? 0.22 : 0.55);
+        (isDark
+            ? Colors.white.withValues(alpha: 0.22)
+            : colorScheme.outline.withValues(alpha: 0.28));
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -39,7 +54,7 @@ class AcrylicSurface extends StatelessWidget {
         boxShadow: shadow
             ? [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: isDark ? 0.28 : 0.10),
+                  color: Colors.black.withValues(alpha: isDark ? 0.28 : 0.08),
                   blurRadius: 28,
                   offset: const Offset(0, 14),
                 ),
@@ -57,10 +72,7 @@ class AcrylicSurface extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  tintColor.withValues(alpha: fillOpacity + (isDark ? 0.06 : 0.14)),
-                  tintColor.withValues(alpha: fillOpacity * 0.55),
-                ],
+                colors: [topColor, bottomColor],
               ),
             ),
             child: padding == null
