@@ -9,6 +9,8 @@ import '../../../shared/widgets/app_confirm_dialog.dart';
 import '../../../shared/widgets/app_loading_panel.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../../settings/providers/settings_providers.dart';
+import '../../templates/providers/template_providers.dart';
+import '../../templates/widgets/template_picker_sheet.dart';
 import '../models/proforma_status.dart';
 import '../providers/proforma_providers.dart';
 import '../widgets/proforma_status_chip.dart';
@@ -32,12 +34,22 @@ class _ProformaScreenState extends ConsumerState<ProformaScreen> {
     final userId = ref.read(currentUserIdProvider);
     if (userId == null) return;
 
+    final pick = await showTemplatePickerSheet(context);
+    if (pick == null || !mounted) return;
+
     setState(() => _creating = true);
     try {
       final currency = ref.read(proformaDefaultCurrencyProvider);
+      final document = switch (pick) {
+        TemplatePickBlank() => null,
+        TemplatePickSelected(:final template) => await ref
+            .read(templateServiceProvider)
+            .materializeForProforma(template),
+      };
       final created = await ref.read(proformaServiceProvider).createDraft(
             userId: userId,
             currency: currency,
+            document: document,
           );
       ref.invalidate(proformasListProvider);
       if (!mounted) return;

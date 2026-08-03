@@ -90,12 +90,16 @@ class ProformaTableBuilder extends StatelessWidget {
     required this.defaultUnit,
     required this.onChanged,
     this.readOnly = false,
+    this.textImageFolder = 'proforma_text',
   });
 
   final ProformaDocument document;
   final MeasureUnit defaultUnit;
   final ProformaDocumentChanged onChanged;
   final bool readOnly;
+
+  /// Carpeta bajo `profy_images/` para adjuntos de bloques de texto.
+  final String textImageFolder;
 
   List<ProformaBlock> get _blocks => List<ProformaBlock>.from(document.blocks);
 
@@ -291,6 +295,7 @@ class ProformaTableBuilder extends StatelessWidget {
         ),
       final ProformaTextBlock text => _TextBlockEditor(
           block: text,
+          imageFolder: textImageFolder,
           reorderHandle: reorderHandle,
           onChanged: _replaceBlock,
           onRemove: () => _removeBlock(text.id),
@@ -336,12 +341,14 @@ class ProformaTableBuilder extends StatelessWidget {
 class _TextBlockEditor extends ConsumerStatefulWidget {
   const _TextBlockEditor({
     required this.block,
+    required this.imageFolder,
     required this.onChanged,
     required this.onRemove,
     required this.reorderHandle,
   });
 
   final ProformaTextBlock block;
+  final String imageFolder;
   final ValueChanged<ProformaBlock> onChanged;
   final VoidCallback onRemove;
   final Widget reorderHandle;
@@ -478,7 +485,7 @@ class _TextBlockEditorState extends ConsumerState<_TextBlockEditor> {
       for (var i = 0; i < files.length; i++) {
         final path = await storage.saveImage(
           source: File(files[i].path),
-          folder: 'proforma_text',
+          folder: widget.imageFolder,
           fileName: '${widget.block.id}_${stamp}_$i',
         );
         saved.add(path);

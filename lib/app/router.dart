@@ -17,6 +17,7 @@ import '../features/settings/screens/edit_profile_screen.dart';
 import '../features/settings/screens/edit_username_screen.dart';
 import '../features/settings/screens/payment_methods_screen.dart';
 import '../features/templates/screens/plantillas_screen.dart';
+import '../features/templates/screens/template_editor_screen.dart';
 import 'navigation/app_tab.dart';
 import 'navigation/tab_slide_page.dart';
 import 'shell/main_shell.dart';
@@ -142,6 +143,20 @@ final routerProvider = Provider<GoRouter>((ref) {
                 child: const PlantillasScreen(),
               );
             },
+            routes: [
+              GoRoute(
+                path: ':id',
+                pageBuilder: (context, state) {
+                  final id =
+                      int.tryParse(state.pathParameters['id'] ?? '') ?? 0;
+                  return buildTabSlidePage(
+                    key: state.pageKey,
+                    forward: true,
+                    child: TemplateEditorScreen(templateId: id),
+                  );
+                },
+              ),
+            ],
           ),
           GoRoute(
             path: ConfiguracionScreen.routePath,

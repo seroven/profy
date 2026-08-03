@@ -36,6 +36,7 @@ class ProformaService {
   Future<Proforma> createDraft({
     required int userId,
     AppCurrency? currency,
+    ProformaDocument? document,
   }) {
     return withMinDuration(() async {
       final code = await _uniqueCode();
@@ -47,7 +48,9 @@ class ProformaService {
               proformaDate: DateTime(now.year, now.month, now.day),
               currency: Value(currency?.code ?? AppCurrency.pen.code),
               status: Value(ProformaStatus.draft.code),
-              documentJson: Value(ProformaDocument.empty().toJsonString()),
+              documentJson: Value(
+                (document ?? ProformaDocument.empty()).toJsonString(),
+              ),
               userCreate: const Value(null),
               userUpdate: const Value(null),
             ),
