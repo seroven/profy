@@ -5,13 +5,16 @@ import '../../../app/theme/app_color_theme.dart';
 import '../../../app/theme/theme_provider.dart';
 import '../../../core/database/app_database.dart';
 
-void applyPreferencesToThemeReader(Ref ref, UserPreference preferences) {
+void applyPreferencesToThemeReader(
+  UserPreference preferences, {
+  required T Function<T>(ProviderListenable<T> provider) read,
+}) {
   final mode =
       preferences.themeMode == 'light' ? ThemeMode.light : ThemeMode.dark;
   final color = AppColorTheme.values.firstWhere(
     (item) => item.name == preferences.colorTheme,
     orElse: () => AppColorTheme.blue,
   );
-  ref.read(themeModeProvider.notifier).setThemeMode(mode);
-  ref.read(appColorThemeProvider.notifier).setColorTheme(color);
+  read(themeModeProvider.notifier).setThemeMode(mode);
+  read(appColorThemeProvider.notifier).setColorTheme(color);
 }

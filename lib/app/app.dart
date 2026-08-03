@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/constants/app_constants.dart';
@@ -21,6 +22,7 @@ class ProfyApp extends ConsumerWidget {
     final lightTheme = AppTheme.light(colorTheme);
     final darkTheme = AppTheme.dark(colorTheme);
 
+    // Mantiene el splash nativo hasta saber si va a auth o proformas.
     if (auth.isLoading) {
       return MaterialApp(
         title: AppConstants.appName,
@@ -29,12 +31,16 @@ class ProfyApp extends ConsumerWidget {
         darkTheme: darkTheme,
         themeMode: themeMode,
         home: const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
+          backgroundColor: Colors.black,
+          body: SizedBox.shrink(),
         ),
       );
     }
 
     final router = ref.watch(routerProvider);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      FlutterNativeSplash.remove();
+    });
 
     // themeAnimationDuration en cero: el cambio real ocurre bajo el overlay
     // sólido, sin lerp costoso del glass.

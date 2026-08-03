@@ -52,7 +52,10 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   Future<void> _ensureProfileAndTheme(int userId) async {
     final ensured =
         await ref.read(profileBootstrapServiceProvider).ensureForUser(userId);
-    applyPreferencesToThemeReader(ref, ensured.preferences);
+    applyPreferencesToThemeReader(
+      ensured.preferences,
+      read: ref.read,
+    );
   }
 
   /// Retorna mensaje de error o `null` si el acceso fue exitoso.

@@ -26,52 +26,42 @@ class _EditCompanyLogoScreenState
   final _nameController = TextEditingController();
   bool _saving = false;
   bool _hydrated = false;
-  String? _previewPath;
-  bool _previewCleared = false;
 
-  String? get _logoPath {
-    if (_previewCleared) return null;
-    return _previewPath ??
-        ref.watch(userPreferencesProvider).valueOrNull?.companyLogoPath;
+  String? _originalLogoPath;
+  String? _pendingLogoPath;
+  bool _logoRemoved = false;
+
+  String? get _displayLogoPath {
+    if (_logoRemoved) return null;
+    return _pendingLogoPath ?? _originalLogoPath;
   }
 
   @override
   void dispose() {
+    final pending = _pendingLogoPath;
+    final original = _originalLogoPath;
     _nameController.dispose();
     super.dispose();
+    // Descarta un logo nuevo que nunca se guardó.
+    if (pending != null && pending != original) {
+      final file = File(pending);
+      if (file.existsSync()) {
+        file.deleteSync();
+      }
+    }
   }
 
   void _hydrate() {
     final prefs = ref.read(userPreferencesProvider).valueOrNull;
     if (prefs == null || _hydrated) return;
     _nameController.text = prefs.companyName ?? '';
+    _originalLogoPath = prefs.companyLogoPath;
     _hydrated = true;
-  }
-
-  Future<void> _saveName() async {
-    final userId = ref.read(currentUserIdProvider);
-    if (userId == null) return;
-
-    setState(() => _saving = true);
-    try {
-      await ref.read(userPreferencesServiceProvider).updateCompanyProfile(
-            userId: userId,
-            companyName: _nameController.text,
-          );
-      ref.invalidate(userPreferencesProvider);
-      if (mounted) AppToast.success(context, 'Nombre de empresa guardado');
-    } catch (_) {
-      if (mounted) {
-        AppToast.error(context, 'No se pudo guardar el nombre');
-      }
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
   }
 
   Future<void> _pickLogo() async {
     final userId = ref.read(currentUserIdProvider);
-    if (userId == null) return;
+    if (userId == null || _saving) return;
 
     final file = await ImagePicker().pickImage(
       source: ImageSource.gallery,
@@ -80,67 +70,84 @@ class _EditCompanyLogoScreenState
     );
     if (file == null) return;
 
-    setState(() => _saving = true);
     try {
-      final prefs = ref.read(userPreferencesProvider).valueOrNull;
       final storage = ref.read(localImageStorageProvider);
-      final previousPath = prefs?.companyLogoPath;
+      final previousPending = _pendingLogoPath;
       final path = await storage.saveImage(
         source: File(file.path),
         folder: 'logos',
         fileName: 'company_${userId}_${DateTime.now().millisecondsSinceEpoch}',
       );
-      await ref.read(userPreferencesServiceProvider).updateCompanyLogo(
-            userId: userId,
-            logoPath: path,
-          );
-      await storage.deleteIfExists(
-        previousPath == path ? null : previousPath,
-      );
-      if (previousPath != null) {
-        imageCache.evict(FileImage(File(previousPath)));
+      if (previousPending != null && previousPending != _originalLogoPath) {
+        await storage.deleteIfExists(previousPending);
       }
-      ref.invalidate(userPreferencesProvider);
-      if (mounted) {
-        setState(() {
-          _previewPath = path;
-          _previewCleared = false;
-        });
-        AppToast.success(context, 'Logo actualizado');
-      }
+      if (!mounted) return;
+      setState(() {
+        _pendingLogoPath = path;
+        _logoRemoved = false;
+      });
     } catch (_) {
-      if (mounted) AppToast.error(context, 'No se pudo actualizar el logo');
-    } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        AppToast.error(context, 'No se pudo cargar el logo');
+      }
     }
   }
 
-  Future<void> _removeLogo() async {
+  void _markLogoRemoved() {
+    if (_saving) return;
+    setState(() => _logoRemoved = true);
+  }
+
+  Future<void> _save() async {
     final userId = ref.read(currentUserIdProvider);
-    if (userId == null) return;
+    if (userId == null || _saving) return;
 
     setState(() => _saving = true);
     try {
-      final prefs = ref.read(userPreferencesProvider).valueOrNull;
-      final previousPath = prefs?.companyLogoPath ?? _previewPath;
-      await ref.read(userPreferencesServiceProvider).updateCompanyLogo(
+      final storage = ref.read(localImageStorageProvider);
+      final updateLogo = _logoRemoved || _pendingLogoPath != null;
+      final nextLogoPath =
+          _logoRemoved ? null : (_pendingLogoPath ?? _originalLogoPath);
+
+      await ref.read(userPreferencesServiceProvider).updateCompanyProfile(
             userId: userId,
-            logoPath: null,
+            companyName: _nameController.text,
+            logoPath: nextLogoPath,
+            updateLogo: updateLogo,
           );
-      await ref.read(localImageStorageProvider).deleteIfExists(previousPath);
-      if (previousPath != null) {
-        imageCache.evict(FileImage(File(previousPath)));
+
+      if (updateLogo) {
+        final previous = _originalLogoPath;
+        if (_logoRemoved) {
+          await storage.deleteIfExists(previous);
+          if (_pendingLogoPath != null) {
+            await storage.deleteIfExists(_pendingLogoPath);
+          }
+          if (previous != null) {
+            imageCache.evict(FileImage(File(previous)));
+          }
+        } else if (_pendingLogoPath != null) {
+          await storage.deleteIfExists(
+            previous == _pendingLogoPath ? null : previous,
+          );
+          if (previous != null && previous != _pendingLogoPath) {
+            imageCache.evict(FileImage(File(previous)));
+          }
+        }
       }
+
       ref.invalidate(userPreferencesProvider);
-      if (mounted) {
-        setState(() {
-          _previewPath = null;
-          _previewCleared = true;
-        });
-        AppToast.success(context, 'Logo eliminado');
-      }
+      if (!mounted) return;
+      setState(() {
+        _originalLogoPath = nextLogoPath;
+        _pendingLogoPath = null;
+        _logoRemoved = false;
+      });
+      AppToast.success(context, 'Empresa actualizada');
     } catch (_) {
-      if (mounted) AppToast.error(context, 'No se pudo eliminar el logo');
+      if (mounted) {
+        AppToast.error(context, 'No se pudo guardar la empresa');
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -155,7 +162,7 @@ class _EditCompanyLogoScreenState
     });
     _hydrate();
 
-    final logoPath = _logoPath;
+    final logoPath = _displayLogoPath;
     final theme = Theme.of(context);
 
     return SettingsSubpageScaffold(
@@ -171,12 +178,6 @@ class _EditCompanyLogoScreenState
             hint: 'Se mostrará en tus proformas',
             textInputAction: TextInputAction.done,
             enabled: !_saving,
-          ),
-          const SizedBox(height: 14),
-          AppButton(
-            label: 'Guardar nombre',
-            isLoading: _saving,
-            onPressed: _saving ? null : _saveName,
           ),
           const SizedBox(height: 28),
           Text('Logo', style: theme.textTheme.titleSmall),
@@ -202,19 +203,24 @@ class _EditCompanyLogoScreenState
                     ),
             ),
           ),
-          const SizedBox(height: 20),
-          AppButton(
-            label: logoPath == null ? 'Subir logo' : 'Cambiar logo',
-            isLoading: _saving,
+          const SizedBox(height: 14),
+          OutlinedButton(
             onPressed: _saving ? null : _pickLogo,
+            child: Text(logoPath == null ? 'Subir logo' : 'Cambiar logo'),
           ),
           if (logoPath != null) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             OutlinedButton(
-              onPressed: _saving ? null : _removeLogo,
+              onPressed: _saving ? null : _markLogoRemoved,
               child: const Text('Eliminar logo'),
             ),
           ],
+          const SizedBox(height: 28),
+          AppButton(
+            label: 'Guardar',
+            isLoading: _saving,
+            onPressed: _saving ? null : _save,
+          ),
         ],
       ),
     );

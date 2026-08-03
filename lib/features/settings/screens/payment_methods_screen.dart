@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../shared/widgets/acrylic_surface.dart';
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/app_loading_panel.dart';
 import '../../../shared/widgets/app_toast.dart';
 import '../models/payment_method_type.dart';
 import '../providers/settings_providers.dart';
@@ -27,7 +28,8 @@ class _PaymentMethodsScreenState extends ConsumerState<PaymentMethodsScreen> {
     setState(() => _busy = true);
     try {
       await ref.read(paymentMethodsServiceProvider).softDelete(id);
-      await ref.refresh(paymentMethodsProvider.future);
+      ref.invalidate(paymentMethodsProvider);
+      await ref.read(paymentMethodsProvider.future);
       if (mounted) AppToast.success(context, 'Medio eliminado');
     } catch (_) {
       if (mounted) {
@@ -46,14 +48,21 @@ class _PaymentMethodsScreenState extends ConsumerState<PaymentMethodsScreen> {
         methodsAsync.isRefreshing ||
         methodsAsync.isReloading;
 
+    const loader = Center(
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 20),
+        child: AppLoadingPanel(message: 'Cargando medios de pago…'),
+      ),
+    );
+
     return SettingsSubpageScaffold(
       title: 'Medios de pago',
       child: showLoader
-          ? const Center(child: CircularProgressIndicator())
+          ? loader
           : methodsAsync.when(
               skipLoadingOnReload: false,
               skipLoadingOnRefresh: false,
-              loading: () => const Center(child: CircularProgressIndicator()),
+              loading: () => loader,
               error: (error, stackTrace) =>
                   const Center(child: Text('No se pudieron cargar')),
               data: (methods) {

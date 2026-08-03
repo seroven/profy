@@ -1,13 +1,19 @@
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../shared/widgets/app_button.dart';
+import '../../../shared/widgets/app_confirm_dialog.dart';
 import '../../../shared/widgets/app_loading_panel.dart';
+import '../../../shared/widgets/app_toast.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../proformas/providers/proforma_providers.dart';
 import '../providers/settings_providers.dart';
+import '../providers/theme_sync.dart';
 import '../widgets/settings_section.dart';
 
 class ConfiguracionScreen extends ConsumerStatefulWidget {
@@ -23,12 +29,113 @@ class ConfiguracionScreen extends ConsumerStatefulWidget {
 
 class _ConfiguracionScreenState extends ConsumerState<ConfiguracionScreen> {
   bool _isLoggingOut = false;
+  bool _isBackingUp = false;
 
   Future<void> _logout() async {
     if (_isLoggingOut) return;
     setState(() => _isLoggingOut = true);
     await ref.read(authProvider.notifier).logout();
     if (mounted) setState(() => _isLoggingOut = false);
+  }
+
+  String _backupFileName() {
+    final now = DateTime.now();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return 'profy_backup_${now.year}${two(now.month)}${two(now.day)}_'
+        '${two(now.hour)}${two(now.minute)}.profy';
+  }
+
+  Future<void> _exportBackup() async {
+    if (_isBackingUp) return;
+    final userId = ref.read(currentUserIdProvider);
+    if (userId == null) return;
+
+    setState(() => _isBackingUp = true);
+    try {
+      final bytes =
+          await ref.read(dataBackupServiceProvider).exportForUser(userId);
+      final fileName = _backupFileName();
+      final savedPath = await FilePicker.saveFile(
+        dialogTitle: 'Guardar respaldo Profy',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: const ['profy'],
+        bytes: bytes,
+      );
+      if (!mounted) return;
+      if (savedPath == null) return;
+      AppToast.success(context, 'Respaldo descargado');
+    } catch (_) {
+      if (mounted) {
+        AppToast.error(context, 'No se pudo descargar el respaldo');
+      }
+    } finally {
+      if (mounted) setState(() => _isBackingUp = false);
+    }
+  }
+
+  Future<void> _importBackup() async {
+    if (_isBackingUp) return;
+    final userId = ref.read(currentUserIdProvider);
+    if (userId == null) return;
+
+    final confirmed = await AppConfirmDialog.show(
+      context,
+      title: 'Importar respaldo',
+      description:
+          'Esto reemplazará tus proformas, perfil, preferencias y medios de '
+          'pago actuales con el contenido del archivo .profy. '
+          'Esta acción no se puede deshacer.',
+      confirmLabel: 'Importar',
+      cancelLabel: 'Cancelar',
+      destructive: true,
+    );
+    if (!confirmed || !mounted) return;
+
+    final file = await FilePicker.pickFile(
+      type: FileType.custom,
+      allowedExtensions: const ['profy'],
+    );
+    if (file == null || !mounted) return;
+
+    late final Uint8List bytes;
+    try {
+      bytes = await file.readAsBytes();
+    } catch (_) {
+      if (mounted) {
+        AppToast.error(context, 'No se pudo leer el archivo .profy');
+      }
+      return;
+    }
+
+    setState(() => _isBackingUp = true);
+    try {
+      await ref.read(dataBackupServiceProvider).importForUser(
+            userId: userId,
+            bytes: bytes,
+          );
+
+      ref.invalidate(userDetailProvider);
+      ref.invalidate(userPreferencesProvider);
+      ref.invalidate(paymentMethodsProvider);
+      ref.invalidate(proformasListProvider);
+      await ref.read(authProvider.notifier).reloadUser();
+
+      final prefs = await ref.read(userPreferencesProvider.future);
+      if (prefs != null) {
+        applyPreferencesToThemeReader(prefs, read: ref.read);
+      }
+
+      if (mounted) {
+        AppToast.success(context, 'Respaldo importado correctamente');
+      }
+    } catch (_) {
+      if (mounted) {
+        AppToast.error(context, 'No se pudo importar el respaldo');
+      }
+    } finally {
+      if (mounted) setState(() => _isBackingUp = false);
+    }
   }
 
   @override
@@ -206,6 +313,28 @@ class _ConfiguracionScreenState extends ConsumerState<ConfiguracionScreen> {
                               onTap: () => context.push(
                                 '${ConfiguracionScreen.routePath}/medios-pago',
                               ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 18),
+                        SettingsSection(
+                          title: 'Datos',
+                          children: [
+                            SettingsTile(
+                              icon: Icons.download_outlined,
+                              title: 'Exportar respaldo',
+                              subtitle: _isBackingUp
+                                  ? 'Procesando…'
+                                  : 'Descarga un archivo .profy de seguridad',
+                              onTap: _isBackingUp ? null : _exportBackup,
+                            ),
+                            SettingsTile(
+                              icon: Icons.upload_file_outlined,
+                              title: 'Importar respaldo',
+                              subtitle: _isBackingUp
+                                  ? 'Procesando…'
+                                  : 'Reemplaza los datos actuales del equipo',
+                              onTap: _isBackingUp ? null : _importBackup,
                             ),
                           ],
                         ),

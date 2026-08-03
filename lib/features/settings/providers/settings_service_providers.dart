@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/database/database_provider.dart';
 import '../../auth/services/password_hasher.dart';
 import '../services/account_service.dart';
+import '../services/data_backup_service.dart';
 import '../services/local_image_storage.dart';
 import '../services/payment_methods_service.dart';
 import '../services/profile_bootstrap_service.dart';
@@ -43,4 +44,8 @@ final accountServiceProvider = Provider<AccountService>((ref) {
 
 final localImageStorageProvider = Provider<LocalImageStorage>((ref) {
   return LocalImageStorage();
+});
+
+final dataBackupServiceProvider = Provider<DataBackupService>((ref) {
+  return DataBackupService(ref.watch(databaseProvider));
 });

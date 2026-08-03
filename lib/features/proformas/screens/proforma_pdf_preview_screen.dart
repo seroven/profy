@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -44,7 +45,7 @@ class _ProformaPdfPreviewScreenState
   Uint8List? _bytes;
   String _fileName = 'proforma.pdf';
   String? _error;
-  bool _actionBusy = false;
+  _PdfAction? _busyAction;
 
   @override
   void initState() {
@@ -77,8 +78,8 @@ class _ProformaPdfPreviewScreenState
 
   Future<void> _share() async {
     final bytes = _bytes;
-    if (bytes == null || _actionBusy) return;
-    setState(() => _actionBusy = true);
+    if (bytes == null || _busyAction != null) return;
+    setState(() => _busyAction = _PdfAction.share);
     try {
       await Printing.sharePdf(bytes: bytes, filename: _fileName);
     } catch (error, stackTrace) {
@@ -87,7 +88,32 @@ class _ProformaPdfPreviewScreenState
         AppToast.error(context, 'No se pudo compartir el PDF');
       }
     } finally {
-      if (mounted) setState(() => _actionBusy = false);
+      if (mounted) setState(() => _busyAction = null);
+    }
+  }
+
+  Future<void> _download() async {
+    final bytes = _bytes;
+    if (bytes == null || _busyAction != null) return;
+    setState(() => _busyAction = _PdfAction.download);
+    try {
+      final savedPath = await FilePicker.saveFile(
+        dialogTitle: 'Guardar PDF',
+        fileName: _fileName,
+        type: FileType.custom,
+        allowedExtensions: const ['pdf'],
+        bytes: bytes,
+      );
+      if (!mounted) return;
+      if (savedPath == null) return;
+      AppToast.success(context, 'PDF descargado');
+    } catch (error, stackTrace) {
+      debugPrint('PDF download failed: $error\n$stackTrace');
+      if (mounted) {
+        AppToast.error(context, 'No se pudo descargar el PDF');
+      }
+    } finally {
+      if (mounted) setState(() => _busyAction = null);
     }
   }
 
@@ -212,11 +238,26 @@ class _ProformaPdfPreviewScreenState
           opacity: isDark ? 0.22 : 0.16,
           child: Padding(
             padding: const EdgeInsets.all(12),
-            child: AppButton(
-              label: 'Compartir',
-              icon: Icons.ios_share_rounded,
-              isLoading: _actionBusy,
-              onPressed: _actionBusy ? null : _share,
+            child: Row(
+              children: [
+                Expanded(
+                  child: AppButton(
+                    label: 'Descargar',
+                    icon: Icons.download_rounded,
+                    isLoading: _busyAction == _PdfAction.download,
+                    onPressed: _busyAction != null ? null : _download,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: AppButton(
+                    label: 'Compartir',
+                    icon: Icons.ios_share_rounded,
+                    isLoading: _busyAction == _PdfAction.share,
+                    onPressed: _busyAction != null ? null : _share,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -224,3 +265,5 @@ class _ProformaPdfPreviewScreenState
     );
   }
 }
+
+enum _PdfAction { download, share }

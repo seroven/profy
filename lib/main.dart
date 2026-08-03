@@ -8,8 +8,4 @@ void main() {
   final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
   runApp(const ProviderScope(child: ProfyApp()));
-  // Splash nativo hasta el primer frame; luego se quita.
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    FlutterNativeSplash.remove();
-  });
 }

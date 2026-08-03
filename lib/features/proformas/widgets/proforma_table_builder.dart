@@ -31,6 +31,19 @@ const double _headerToFieldGap = 6;
 /// Espacio entre inputs.
 const double _fieldGap = 6;
 
+/// Campo (`ValueKey`) que debe recibir foco tras crear un bloque/fila.
+class _PendingFieldFocus {
+  static String? _fieldId;
+
+  static void request(String fieldId) => _fieldId = fieldId;
+
+  static bool take(String fieldId) {
+    if (_fieldId != fieldId) return false;
+    _fieldId = null;
+    return true;
+  }
+}
+
 /// Propaga si el documento es solo lectura (proforma terminada).
 class _DocEditScope extends InheritedWidget {
   const _DocEditScope({
@@ -144,7 +157,9 @@ class ProformaTableBuilder extends StatelessWidget {
   void _onDocumentAction(String id) {
     switch (id) {
       case 'table':
-        _addBlock(ProformaTableBlock.create());
+        final table = ProformaTableBlock.create();
+        _PendingFieldFocus.request('table_name_${table.id}');
+        _addBlock(table);
       case 'text':
         _addBlock(ProformaTextBlock.create());
       case 'profile':
@@ -984,8 +999,10 @@ class _TableBlock extends StatelessWidget {
   }
 
   void _addSection() {
+    final section = ProformaSection.create();
+    _PendingFieldFocus.request('sec_desc_${section.id}');
     onChanged(
-      table.copyWith(sections: [...table.sections, ProformaSection.create()]),
+      table.copyWith(sections: [...table.sections, section]),
     );
   }
 
@@ -1000,15 +1017,14 @@ class _TableBlock extends StatelessWidget {
   void _addSum() {
     if (!ProformaTotals.canAddSum(table.rows)) return;
     final isChain = ProformaTotals.hasAnySum(table.rows);
-    _setRows([
-      ...table.rows,
-      ProformaSumRow.create(
-        targetId: table.id,
-        target: isChain
-            ? ProformaSumTarget.chain
-            : ProformaSumTarget.table,
-      ),
-    ]);
+    final sum = ProformaSumRow.create(
+      targetId: table.id,
+      target: isChain
+          ? ProformaSumTarget.chain
+          : ProformaSumTarget.table,
+    );
+    _PendingFieldFocus.request('sum_label_${sum.id}');
+    _setRows([...table.rows, sum]);
   }
 
   Future<void> _addDiscount(BuildContext context) async {
@@ -1022,7 +1038,9 @@ class _TableBlock extends StatelessWidget {
     );
     final amount = await _askDiscountAmount(context, baseAmount: base);
     if (amount == null) return;
-    _setRows([...table.rows, ProformaDiscountRow.create(amount: amount)]);
+    final discount = ProformaDiscountRow.create(amount: amount);
+    _PendingFieldFocus.request('disc_label_${discount.id}');
+    _setRows([...table.rows, discount]);
   }
 
   List<_AddAction> _actions() {
@@ -1168,19 +1186,18 @@ class _SectionBlock extends StatelessWidget {
 
   void _addItem() {
     if (section.usesSubsections) return;
-    _setRows(
-      ProformaTotals.insertItem(
-        section.rows,
-        ProformaItemRow.create(defaultUnit: defaultUnit.code),
-      ),
-    );
+    final item = ProformaItemRow.create(defaultUnit: defaultUnit.code);
+    _PendingFieldFocus.request('item_desc_${item.id}');
+    _setRows(ProformaTotals.insertItem(section.rows, item));
   }
 
   void _addSubsection() {
     if (section.usesItems) return;
+    final subsection = ProformaSubsection.create();
+    _PendingFieldFocus.request('sub_desc_${subsection.id}');
     onChanged(
       section.copyWith(
-        subsections: [...section.subsections, ProformaSubsection.create()],
+        subsections: [...section.subsections, subsection],
       ),
     );
   }
@@ -1188,15 +1205,14 @@ class _SectionBlock extends StatelessWidget {
   void _addSum() {
     if (!ProformaTotals.canAddSum(section.rows)) return;
     final isChain = ProformaTotals.hasAnySum(section.rows);
-    _setRows([
-      ...section.rows,
-      ProformaSumRow.create(
-        targetId: section.id,
-        target: isChain
-            ? ProformaSumTarget.chain
-            : ProformaSumTarget.section,
-      ),
-    ]);
+    final sum = ProformaSumRow.create(
+      targetId: section.id,
+      target: isChain
+          ? ProformaSumTarget.chain
+          : ProformaSumTarget.section,
+    );
+    _PendingFieldFocus.request('sum_label_${sum.id}');
+    _setRows([...section.rows, sum]);
   }
 
   Future<void> _addDiscount(BuildContext context) async {
@@ -1210,7 +1226,9 @@ class _SectionBlock extends StatelessWidget {
     );
     final amount = await _askDiscountAmount(context, baseAmount: base);
     if (amount == null) return;
-    _setRows([...section.rows, ProformaDiscountRow.create(amount: amount)]);
+    final discount = ProformaDiscountRow.create(amount: amount);
+    _PendingFieldFocus.request('disc_label_${discount.id}');
+    _setRows([...section.rows, discount]);
   }
 
   List<_AddAction> _actions() {
@@ -1326,7 +1344,7 @@ class _SectionBlock extends StatelessWidget {
     final actions = _actions();
 
     return _CollapseHost(
-      initiallyExpanded: false,
+      initiallyExpanded: true,
       headerBuilder: (context, expanded, toggle) {
         return _BlockHeader(
           chip: const _TypeChip(label: 'Sección', tone: _ChipTone.section),
@@ -1443,26 +1461,22 @@ class _SubsectionBlock extends StatelessWidget {
   }
 
   void _addItem() {
-    _setRows(
-      ProformaTotals.insertItem(
-        subsection.rows,
-        ProformaItemRow.create(defaultUnit: defaultUnit.code),
-      ),
-    );
+    final item = ProformaItemRow.create(defaultUnit: defaultUnit.code);
+    _PendingFieldFocus.request('item_desc_${item.id}');
+    _setRows(ProformaTotals.insertItem(subsection.rows, item));
   }
 
   void _addSum() {
     if (!ProformaTotals.canAddSum(subsection.rows)) return;
     final isChain = ProformaTotals.hasAnySum(subsection.rows);
-    _setRows([
-      ...subsection.rows,
-      ProformaSumRow.create(
-        targetId: subsection.id,
-        target: isChain
-            ? ProformaSumTarget.chain
-            : ProformaSumTarget.subsection,
-      ),
-    ]);
+    final sum = ProformaSumRow.create(
+      targetId: subsection.id,
+      target: isChain
+          ? ProformaSumTarget.chain
+          : ProformaSumTarget.subsection,
+    );
+    _PendingFieldFocus.request('sum_label_${sum.id}');
+    _setRows([...subsection.rows, sum]);
   }
 
   Future<void> _addDiscount(BuildContext context) async {
@@ -1477,10 +1491,9 @@ class _SubsectionBlock extends StatelessWidget {
     );
     final amount = await _askDiscountAmount(context, baseAmount: base);
     if (amount == null) return;
-    _setRows([
-      ...subsection.rows,
-      ProformaDiscountRow.create(amount: amount),
-    ]);
+    final discount = ProformaDiscountRow.create(amount: amount);
+    _PendingFieldFocus.request('disc_label_${discount.id}');
+    _setRows([...subsection.rows, discount]);
   }
 
   List<_AddAction> _actions() {
@@ -1536,7 +1549,7 @@ class _SubsectionBlock extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(left: _indentStep),
       child: _CollapseHost(
-        initiallyExpanded: false,
+        initiallyExpanded: true,
         headerBuilder: (context, expanded, toggle) {
           return _BlockHeader(
             chip: const _TypeChip(
@@ -2283,11 +2296,28 @@ class _BoundField extends StatefulWidget {
 
 class _BoundFieldState extends State<_BoundField> {
   late final TextEditingController _controller;
+  late final FocusNode _focusNode;
 
   @override
   void initState() {
     super.initState();
     _controller = TextEditingController(text: widget.initialValue);
+    _focusNode = FocusNode();
+    final key = widget.key;
+    final fieldId = key is ValueKey<String> ? key.value : null;
+    if (fieldId != null && _PendingFieldFocus.take(fieldId)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (_DocEditScope.readOnlyOf(context)) return;
+        _focusNode.requestFocus();
+        Scrollable.ensureVisible(
+          context,
+          duration: AppMotion.fast,
+          alignment: 0.2,
+          curve: AppMotion.standard,
+        );
+      });
+    }
   }
 
   @override
@@ -2301,6 +2331,7 @@ class _BoundFieldState extends State<_BoundField> {
 
   @override
   void dispose() {
+    _focusNode.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -2310,6 +2341,7 @@ class _BoundFieldState extends State<_BoundField> {
     final readOnly = _DocEditScope.readOnlyOf(context);
     return TextFormField(
       controller: _controller,
+      focusNode: _focusNode,
       keyboardType: widget.keyboardType,
       inputFormatters: widget.inputFormatters,
       readOnly: readOnly,
