@@ -18,6 +18,18 @@ const double _sectionGap = 16;
 const double _subsectionGap = 10;
 const double _sectionFinanceGap = 10;
 
+/// Borde completo de grilla (exterior + interior).
+final _gridBorder = pw.TableBorder(
+  left: const pw.BorderSide(color: ProformaPdfTheme.tableLine, width: 0.85),
+  top: const pw.BorderSide(color: ProformaPdfTheme.tableLine, width: 0.85),
+  right: const pw.BorderSide(color: ProformaPdfTheme.tableLine, width: 0.85),
+  bottom: const pw.BorderSide(color: ProformaPdfTheme.tableLine, width: 0.85),
+  horizontalInside:
+      const pw.BorderSide(color: ProformaPdfTheme.tableLine, width: 0.85),
+  verticalInside:
+      const pw.BorderSide(color: ProformaPdfTheme.tableLine, width: 0.85),
+);
+
 enum _FinanceTone { nested, section, table }
 
 /// Bloque tabla como un solo widget: sin cortes artificiales ni contorno exterior.
@@ -136,8 +148,9 @@ pw.Widget _fullBanner(String text, PdfColor background) {
     padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 10),
     decoration: pw.BoxDecoration(
       color: background,
-      border: const pw.Border(
-        bottom: pw.BorderSide(color: ProformaPdfTheme.line, width: 0.65),
+      border: pw.Border.all(
+        color: ProformaPdfTheme.tableLine,
+        width: 0.85,
       ),
     ),
     child: pw.Text(
@@ -162,10 +175,7 @@ pw.Widget _dataGrid({
   ];
 
   return pw.Table(
-    border: pw.TableBorder.all(
-      color: ProformaPdfTheme.line,
-      width: 0.7,
-    ),
+    border: _gridBorder,
     columnWidths: _colWidths,
     defaultVerticalAlignment: pw.TableCellVerticalAlignment.middle,
     children: rows,
@@ -174,11 +184,9 @@ pw.Widget _dataGrid({
 
 pw.Widget _financeOnlyGrid(List<pw.TableRow> finance) {
   return pw.Table(
-    border: pw.TableBorder.all(
-      color: ProformaPdfTheme.line,
-      width: 0.7,
-    ),
+    border: _gridBorder,
     columnWidths: _colWidths,
+    defaultVerticalAlignment: pw.TableCellVerticalAlignment.middle,
     children: finance,
   );
 }

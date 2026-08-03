@@ -6,6 +6,8 @@ abstract final class ProformaPdfTheme {
   static const PdfColor ink = PdfColor.fromInt(0xFF1F2933);
   static const PdfColor muted = PdfColor.fromInt(0xFF6B7785);
   static const PdfColor line = PdfColor.fromInt(0xFFD7DEE7);
+  /// Borde de celdas de tabla (más legible que [line] en impresión).
+  static const PdfColor tableLine = PdfColor.fromInt(0xFF8A97A6);
   static const PdfColor accent = PdfColor.fromInt(0xFF2F3A4A);
   static const PdfColor accentSoft = PdfColor.fromInt(0xFFE8EEF4);
   static const PdfColor sectionBg = PdfColor.fromInt(0xFFDCE4EE);
