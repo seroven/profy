@@ -28,9 +28,10 @@ class ProformaScreen extends ConsumerStatefulWidget {
 
 class _ProformaScreenState extends ConsumerState<ProformaScreen> {
   bool _creating = false;
+  bool _deleting = false;
 
   Future<void> _create() async {
-    if (_creating) return;
+    if (_creating || _deleting) return;
     final userId = ref.read(currentUserIdProvider);
     if (userId == null) return;
 
@@ -64,6 +65,7 @@ class _ProformaScreenState extends ConsumerState<ProformaScreen> {
   }
 
   Future<void> _delete(int id) async {
+    if (_creating || _deleting) return;
     final confirmed = await AppConfirmDialog.show(
       context,
       title: 'Eliminar proforma',
@@ -73,16 +75,20 @@ class _ProformaScreenState extends ConsumerState<ProformaScreen> {
       cancelLabel: 'Cancelar',
       destructive: true,
     );
-    if (!confirmed) return;
+    if (!confirmed || !mounted) return;
 
+    setState(() => _deleting = true);
     try {
       await ref.read(proformaServiceProvider).softDelete(id);
       ref.invalidate(proformasListProvider);
+      await ref.read(proformasListProvider.future);
       if (mounted) AppToast.success(context, 'Proforma eliminada');
     } catch (_) {
       if (mounted) {
         AppToast.error(context, 'No se pudo eliminar la proforma');
       }
+    } finally {
+      if (mounted) setState(() => _deleting = false);
     }
   }
 
@@ -92,6 +98,7 @@ class _ProformaScreenState extends ConsumerState<ProformaScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final showLoader = _creating ||
+        _deleting ||
         listAsync.isLoading ||
         listAsync.isRefreshing ||
         listAsync.isReloading;
@@ -129,9 +136,11 @@ class _ProformaScreenState extends ConsumerState<ProformaScreen> {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: AppLoadingPanel(
-                      message: _creating
-                          ? 'Creando proforma…'
-                          : 'Cargando proformas…',
+                      message: _deleting
+                          ? 'Eliminando proforma…'
+                          : _creating
+                              ? 'Creando proforma…'
+                              : 'Cargando proformas…',
                     ),
                   ),
                 ),
